@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        *{ margin: 0; padding: 0; list-style: none; color: #333; text-decoration: none; outline: none;}
+        .clear:after{ clear: both; display: block; content: "";}
+        .fl{ float: left;}
+        .fr{ float: right;}
+        .il-par{ font-size: 0;}
+        .il{ display: inline-block; font-size: 12px; vertical-align: top;}
+
+        .wrap{ margin: 200px; margin-bottom: 10px;}
+        .wrap .selected .item{ border: 1px solid #f00; margin-right: 10px; padding: 0 5px;}
+        .wrap .selected .item .content{ display: block; height: 20px; line-height: 20px; font-size: 12px; margin-right: 10px;}
+        .wrap .selected .item .del{ display: block; height: 20px; line-height: 20px; cursor: pointer;}
+
+        .wrap .props{ margin-top: 20px;}
+        .wrap .props .item-content{ line-height: 30px; border-bottom: 1px solid #ccc;}
+        .wrap .props .prop-title,.wrap .props .prop-val{ margin-right: 20px; font-size: 12px;}
+        .wrap .props .prop-title{ width: 50px;}
+        .wrap .props .prop-val .content{ color: #666; width: 50px;}
+        .wrap .props .prop-val .content:hover{ color: #f00;}
+    </style>
+    <script src="jquery-1.12.4.js"></script>
+    <script>
+        $.extend({
+            rnd: function () {
+                return Math.random().toString().substring(2);
+            }
+        });
+        $(function () {
+            var props = [
+                {
+                    id: $.rnd(),
+                    title: "价格",
+                    name: "price",
+                    items: [
+                        {
+                            id: $.rnd(),
+                            title: "0-100"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "100-200"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "200-300"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "300-400"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "400-500"
+                        }
+                    ]
+                },
+                {
+                    id: $.rnd(),
+                    title: "运行内存",
+                    name: "memory",
+                    items: [
+                        {
+                            id: $.rnd(),
+                            title: "16G"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "8G"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "4G"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "1G"
+                        }
+                    ]
+                },
+                {
+                    id: $.rnd(),
+                    title: "机身颜色",
+                    name: "color",
+                    items: [
+                        {
+                            id: $.rnd(),
+                            title: "黑色"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "白色"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "灰色"
+                        },
+                        {
+                            id: $.rnd(),
+                            title: "银色"
+                        }
+                    ]
+                }
+            ];
+            var $props = $(".props");
+
+            renderProps();
+
+            function renderProps(){
+                $.each(props, function (i, o) {
+                    var $curItem = $("<dl>").addClass("item-content clear").append(
+                            $("<dt>").addClass("prop-title fl").html(o.title).attr({name: o.name})
+                    );
+                    $props.append(
+                            $("<li>").addClass("item").append(
+                                    $curItem
+                            )
+                    );
+                    $.each(o.items, function (i1, o1) {
+                        $curItem.append(
+                                $("<dd>").addClass("prop-val fl").append(
+                                        $("<a>").attr({"href": "javascript:;"}).addClass("content fl").html(o1.title).click(fnPropClick).attr({"prop-id": o1.id})
+                                )
+                        );
+                    });
+                });
+            }
+
+            function fnPropClick(){
+
+//                $(this).attr({"href": "??"});
+            }
+
+            function getSearchObj(){
+                var search = window.location.search;
+                search = search.substring(1);
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="wrap">
+        <div class="sel-wrap clear">
+            <div class="sel-txt fl">条件：</div>
+            <ul class="selected clear fl">
+                <!--<li class="item fl clear">-->
+                    <!--<a href="javascript:;" class="content fl">-->
+                        <!--<span class="name">名称</span>-->
+                        <!--<span class="val">对应值</span>-->
+                    <!--</a>-->
+                    <!--<span class="del fl">×</span>-->
+                <!--</li>-->
+            </ul>
+        </div>
+        <ul class="props">
+            <!--<li class="item">-->
+                <!--<dl class="item-content clear">-->
+                    <!--<dt class="prop-title fl">属性名</dt>-->
+                    <!--<dd class="prop-val fl"><a href="javascript:;" class="content">属性值</a></dd>-->
+                    <!--<dd class="prop-val fl"><a href="javascript:;" class="content">属性值</a></dd>-->
+                    <!--<dd class="prop-val fl"><a href="javascript:;" class="content">属性值</a></dd>-->
+                    <!--<dd class="prop-val fl"><a href="javascript:;" class="content">属性值</a></dd>-->
+                <!--</dl>-->
+            <!--</li>-->
+        </ul>
+    </div>
+</body>
+</html>
+<!--
+    知识点：
+    1、js擅长处理对象，因此可以把所有问题都转换到对象上
+    2、实际情况可能是后台渲染，但是道理都一样
+    3、传统开发方式下DOM操作非常复杂，因此Angular Vue React这样的框架就帮我们解决了这一问题
+    4、attr方法会将属性名中大写的字母转换为小写
+-->

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        *{ margin: 0; padding: 0; list-style: none; color: #333; text-decoration: none; outline: none;}
+        .clear:after{ clear: both; display: block; content: "";}
+        .fl{ float: left;}
+        .fr{ float: right;}
+        .il-par{ font-size: 0;}
+        .il{ display: inline-block; font-size: 12px; vertical-align: top;}
+
+        .wrap{ margin: 200px; margin-bottom: 10px;}
+        .wrap .subtract,.wrap .add{ width: 30px; height: 30px; background: #eee; text-align: center; line-height: 30px; font-size: 16px; cursor: pointer;}
+        .wrap .goods-num{ width: 80px; height: 30px; box-sizing: border-box; text-align: center;}
+    </style>
+    <script src="jquery-1.12.4.js"></script>
+    <script>
+        $(function () {
+            var $subtract = $(".subtract");
+            var $add = $(".add").get;
+            var $goodsNum = $(".goods-num");
+            var $myInput = $(".my-input");
+            var curVal = 1;
+            var lastVal = 1;
+            $goodsNum.val(curVal);
+
+            $goodsNum.on("input propertychange", function () {
+                $("#div1").html($(this).val());
+
+                curVal = $(this).val();
+                if(!$.isNumeric(curVal)){
+                    $(this).val(lastVal);
+                }else{
+                    lastVal = curVal;
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="wrap il-par">
+        <div class="subtract il">-</div>
+        <input type="text" class="goods-num il" />
+        <div class="add il">+</div>
+    </div>
+    <div id="div1" style="width: 100px; height: 100px; border: 1px solid #000;">1</div>
+</body>
+</html>
+<!--
+    通过一个简单的案例开头，做一些写法上的约定
+    1、清零样式的添加：重点在inline-block样式，介绍其使用的局限性，为何父级要增加font-size:0，为何子级要增加vertical-align:top
+    2、input和div不对齐的问题，因为浏览器默认给input加了2px的边框，但是我们并没有给input清除默认样式，解决方案：box-sizing:border-box 虽然是CSS3的，但是可以兼容到IE8
+    3、关于border-box的用途，移动端手机上布局时用
+    4、变量命名：jquery获取来的元素，即所有通过jquery获取的DOM对象都以$符号开头，布尔类型的变量都以is开头，回调都以fn开头，普通对象都以o开头，对象所处的作用域越高，为了避免重名，变量名需要越长
+    5、区分原生对象和jquery对象
+    6、事件函数中的this是一个原生对象，原生对象转为jquery对象的方法是用jquery再包一层，$就是一个函数，$()就是函数的调用，jquery会根据传入参数的不同来做不同的处理，例如$(this)传入了原生对象，$(".div")传入了字符串，除了传入函数之外，jquery都会返回一个类数组对象，该对象下有各种各样的方法，通过控制台可以查看到该jquery对象下的各个属性以及原型下的方法(__proto__)，换句话说，每次$("xxx")创建一个jquery对象的时候这个对象都会有这些类似的属性，这些对象的__proto__都指向jquery构造函数的原型，因为__proto__下的addClass attr click等等这些方法都是在原型上扩展的，所谓类数组对象，就是可以直接通过下标访问的，即$("div")[0]，0其实就是$("div")的一个属性，数字类型的属性不可以直接通过.来访问（原因是因为JavaScript编译原理导致，关于JavaScript编译过程后期讨论），所以换成了[]，事实上放在[]里面访问的属性都会将其转换为字符串来访问，即$("div")["0"]和$("div")[0]是一样的，其实普通数组也是一样，var arr = [1,2,3];arr["0"]和arr[0]是一样的，因此数组本质上就是一种特殊的对象，只不过数组对象的属性都是数字类型的
+-->
