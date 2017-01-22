@@ -27,7 +27,8 @@
     <script>
         $.extend({
             rnd: function () {
-                return Math.random().toString().substring(2);
+                arguments.callee.times = arguments.callee.times ? ++arguments.callee.times : 1;
+                return arguments.callee.times;
             }
         });
         $(function () {
@@ -109,11 +110,12 @@
             var $props = $(".props");
 
             renderProps();
+            hideFilterProp();
 
             function renderProps(){
                 $.each(props, function (i, o) {
                     var $curItem = $("<dl>").addClass("item-content clear").append(
-                            $("<dt>").addClass("prop-title fl").html(o.title).attr({name: o.name})
+                            $("<dt>").addClass("prop-title fl").html(o.title).attr({prop_id: o.id})
                     );
                     $props.append(
                             $("<li>").addClass("item").append(
@@ -123,21 +125,74 @@
                     $.each(o.items, function (i1, o1) {
                         $curItem.append(
                                 $("<dd>").addClass("prop-val fl").append(
-                                        $("<a>").attr({"href": "javascript:;"}).addClass("content fl").html(o1.title).click(fnPropClick).attr({"prop-id": o1.id})
+                                        $("<a>").attr({"href": "javascript:;"}).addClass("content fl").html(o1.title).click(fnPropClick).attr({"val_id": o1.id})
                                 )
                         );
                     });
                 });
             }
 
-            function fnPropClick(){
-
-//                $(this).attr({"href": "??"});
+            function hideFilterProp(){
+                var oProp = createPropObj();
+                console.log(oProp);
             }
 
-            function getSearchObj(){
+            function createPropObj(){
                 var search = window.location.search;
                 search = search.substring(1);
+                var aProps = search.split("&");
+                var oProp = {};
+                $.each(aProps, function (i, s) {
+                    var arr = s.split("=");
+                    var aFilterVal;
+                    var oFilterVal = {};
+                    if(arr[0] != "filter"){
+                        oProp[arr[0]] = arr[1];
+                    }else{
+                        aFilterVal = arr[1].split(",");
+                        $.each(aFilterVal, function (i1, s1) {
+                            var arr = s1.split(":");
+                            oFilterVal[arr[0]] = arr[1];
+                        });
+                        oProp["filter"] = oFilterVal;
+                    }
+                });
+                return oProp;
+            }
+
+            function createHref(oProp){
+                var href = window.location.href.substring(0, window.location.href.indexOf("?"));
+                var aProps1 = [];
+                $.each(oProp, function (attr, val) {
+                    if(attr == "filter"){
+                        var arr = [];
+                        $.each(val, function (attr1, val1) {
+                            arr.push(attr1 + ":" + val1);
+                        });
+                        var str = arr.join(",");
+                        aProps1.push(attr + "=" + str);
+                    }else{
+                        aProps1.push(attr + "=" + val);
+                    }
+                });
+                href = href + "?" + aProps1.join("&");
+                return href;
+            }
+
+            function fnPropClick(){
+                var propId = $(this).parents(".item-content").find(".prop-title").attr("prop_id");
+                var valId = $(this).attr("val_id");
+//                var href = window.location.href + "&filter=" + propId + ":" + valId;
+
+                var oProp = createPropObj();
+                oProp.filter = oProp.filter || {};
+                oProp.filter[propId] = valId;
+
+                var href = createHref(oProp);
+                $(this).attr({href: href});
+
+                //点击完成之后隐藏该属性
+//                $(this).parents(".item").hide();
             }
         });
     </script>
@@ -175,5 +230,10 @@
     1、js擅长处理对象，因此可以把所有问题都转换到对象上
     2、实际情况可能是后台渲染，但是道理都一样
     3、传统开发方式下DOM操作非常复杂，因此Angular Vue React这样的框架就帮我们解决了这一问题
-    4、attr方法会将属性名中大写的字母转换为小写
+    4、attr方法会将属性名中大写的字母转换为小写，因此在此采用下划线作分隔符
+    5、点击属性按照字符串处理时非常繁琐，因此转为对象处理，每点击一个属性就往filter后面拼接一段
+    5、点击每个筛选条件后隐藏该条件，直接隐藏是不可以的：$(this).parents(".item").hide(); 因为点击筛选条件后页面会跳转，在此需要注意：www.abc.com/aa/bb.html和www.abc.com/aa/bb.html?filter=xxx是两个链接
+        解决方案：需要在页面每次重新加载时从url中取出该参数判断哪个属性隐藏
+    6、拿到url之后判断隐藏哪个属性用字符串获取的方式太繁琐，因此想到了用对象来处理
+    比较京东和天猫的做法
 -->
