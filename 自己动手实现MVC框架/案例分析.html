@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<style>
+		*{ margin: 0; padding: 0; list-style: none; text-decoration: none; color: #222; box-sizing: content-box; vertical-align: middle;}
+		.list-wrap{ margin: 50px; padding: 30px; border: 1px solid #ccc; }
+		.list-wrap .total-txt{ display: inline-block; }
+		.list-wrap .total-txt.red{ color: red; }
+		.list-wrap .list{ margin-top: 30px; width: 500px; }
+		.list-wrap .list .item{ line-height: 30px; border-bottom: 1px dashed #000; }
+		.list-wrap .list .item .content,.list-wrap .list .item .del{ display: inline-block; }
+		.list-wrap .list .item .del{ color: red; }
+		.list-wrap .comment-wrap{ margin-top: 30px; }
+		.list-wrap input{ height: 20px; }
+	</style>
+	<script></script>
+</head>
+<body>
+	<div class="list-wrap">
+		<div class="total-txt">共</div>
+		<div class="total-txt red num">15</div>
+		<div class="total-txt">条评价</div>
+
+		<ul class="list">
+			<li class="item">
+				<div class="content">Ctrl+P、Ctrl+N作用相当于↑↓方向键的作用</div>
+				<a href="javascript:;" class="del">删除</a>
+			</li>
+			<li class="item">
+				<div class="content">Ctrl+P、Ctrl+N作用相当于↑↓方向键的作用</div>
+				<a href="javascript:;" class="del">删除</a>
+			</li>
+			<li class="item">
+				<div class="content">Ctrl+P、Ctrl+N作用相当于↑↓方向键的作用</div>
+				<a href="javascript:;" class="del">删除</a>
+			</li>
+		</ul>
+
+		<div class="comment-wrap">
+			<input type="text" class="comment" />
+			<input type="button" value="发表评价" class="publish-comment">
+		</div>
+	</div>
+</body>
+</html>
