@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<style>
+		*{ margin: 0; padding: 0; list-style: none; text-decoration: none; color: #222; box-sizing: content-box; vertical-align: middle;}
+		.list-wrap{ margin: 50px; padding: 30px; border: 1px solid #ccc; }
+		.list-wrap .total-txt{ display: inline-block; }
+		.list-wrap .total-txt.red{ color: red; }
+		.list-wrap .list{ margin-top: 30px; width: 500px; }
+		.list-wrap .list .item{ line-height: 30px; border-bottom: 1px dashed #000; }
+		.list-wrap .list .item .content,.list-wrap .list .item .del{ display: inline-block; }
+		.list-wrap .list .item .del{ color: red; }
+		.list-wrap .comment-wrap{ margin-top: 30px; }
+		.list-wrap input{ height: 20px; }
+	</style>
+	<script src="../jquery-1.12.4.js"></script>
+	<script>
+		$(function(){
+			window.comments = ["aaa", "bbb", "ccc"];
+			window.totalNum = comments.length;
+			window.comment = "";
+			window.addComment = function(){
+				window.comments.push(window.comment);
+			};
+			window.watchList = [];
+
+			var registeredDirectives = {
+				"mBind": {
+					render: function(scope, value, $ele){
+						$ele.text(scope[value]);
+					}
+				},
+				"mRepeat": {
+					terminal: true,
+					render: function(scope, value, $ele){
+						var res = value.match(/\s*([$_a-zA-Z]\w+)\s*in\s*([$_a-zA-Z]\w+)\s*/);
+						var key = res[1];
+						// 父级作用域上的数据
+						var group = scope[res[2]];
+						
+						var $parent = $ele.parent();
+
+						$.each(group, function(k, v){
+							var $cloneEle = $ele.clone();
+							var isolateScope = {};
+							isolateScope[key] = v;
+							compileNodes($cloneEle, isolateScope);
+							$parent.append($cloneEle);
+						});
+						$ele.remove();
+					}
+				},
+				"mValue": {
+					render: function(scope, value, $ele){
+						// 暂时通过事件监听来实现一下
+						$ele.on("input", function(){
+							scope[value] = $(this).val();
+						});
+					}
+				},
+				"mClick": {
+					render: function(scope, value, $ele){
+						console.log(value);
+						$ele.on("click", function(){
+							scope[value] && scope[value]();
+						});
+					}
+				}
+			};
+
+			compileNodes($(".list-wrap"));
+
+			function compileNodes($parent, scope, terminal){
+				if(terminal == undefined){
+					terminal = false;
+				}
+				if(terminal){
+					return;
+				}
+				$parent.children().each(function(i, node){
+					var directives = [];
+					$.each(node.attributes, function(i1, attr){
+						if(/^m-/.test(attr.name)){
+							directives.push({
+								name: $.camelCase(attr.name),
+								value: attr.value
+							});
+						}
+					});
+					var curTerminal = false;
+					if(directives.length > 0){
+						$.each(directives, function(i, o){
+							var curDirect = registeredDirectives[o.name];
+							if(curDirect.terminal){
+								curTerminal = true;
+							}
+							if(curDirect){
+								curDirect.render && curDirect.render(scope ? scope : window, o.value.replace(/\(\)/g, ""), $(node));
+							}							
+						});
+					}
+
+					if($(node).children().length > 0 && !curTerminal){
+						compileNodes($(node), scope, curTerminal);
+					}
+				});
+			}
+
+			// 目前问题在于当我们点击完之后评论数量没有变，列表也没有更新，于是我们需要设计一种机制：在click事件触发时变更DOM
+			// 接下来的问题是要变更哪些DOM？其实我们可以这样想：哪些DOM会因为我们的点击事件而变化，通过分析发现显示总条数和评价列表这些DOM会变，因此答案也很简单，应该是去更新当前所处的作用域上的那些DOM
+			// 实际的变化是很复杂的，有可能改变了当前作用域对象上的某个属性，其他很多属性会变，因此我们很容易想到一种机制：当作用域对象上一个属性变化时，就遍历作用域对象上所有的属性，看看哪些变了，执行相应的操作，所谓的相应的操作其实就是改变DOM的操作
+			// 想要改变DOM必须要做监听，所谓监听就是监视数据变化，数据一旦变化就改变DOM————问题：我们需要把当前所处作用域的所有DOM都监听了吗？答案是No，结合上一条分析我们也可以发现只需要监听那些和作用域上绑定的数据相关的DOM，比如m-bind m-repeat等所处的DOM，说白了就是指令所在的DOM
+			// 监听具体实现：要在外面定义一个数组存放所有监听的对象，形成一个队列，外部在数据改变时触发这个队列
+		});
+	</script>
+</head>
+<body>
+	<div class="list-wrap">
+		<div class="total-txt">共</div>
+		<div class="total-txt red num" m-bind="totalNum"></div>
+		<div class="total-txt">条评价</div>
+
+		<ul class="list">
+			<li class="item" m-repeat="item in comments">
+				<div class="content" m-bind="item"></div>
+				<a href="javascript:;" class="del">删除</a>
+			</li>
+		</ul>
+
+		<div class="comment-wrap">
+			<input type="text" class="comment" m-value="comment" />
+			<input type="button" value="发表评价" class="publish-comment" m-click="addComment()">
+		</div>
+	</div>
+</body>
+</html>

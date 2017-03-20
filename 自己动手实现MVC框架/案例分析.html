@@ -14,25 +14,84 @@
 		.list-wrap .comment-wrap{ margin-top: 30px; }
 		.list-wrap input{ height: 20px; }
 	</style>
-	<script></script>
+	<script src="../jquery-1.12.4.js"></script>
+	<script>
+		$(function(){
+			// var comments = ["aaa", "bbb", "ccc"];
+			// var totalNum = comments.length;
+			window.comments = ["aaa", "bbb", "ccc"];
+			window.totalNum = comments.length;
+			// 如果父级作用域上有和item（mRepeat="item in comments"），就会造成一定错误
+			window.item = "123";
+
+			// $(".list-wrap").children().each(function(i, o){
+			// 	var directives = [];
+			// 	$.each(o.attributes, function(i1, attr){
+			// 		if(/^m-/.test(attr.name)){
+			// 			directives.push($.camelCase(attr.name));
+			// 		}
+			// 	});
+
+			// 	$(o).children
+			// });
+
+			var registeredDirectives = {
+				"mBind": function(scope, value, $ele){
+					$ele.text(scope[value]);
+				},
+				"mRepeat": function(scope, value, $ele){
+					var res = value.match(/()/);
+				}
+			};
+
+			compileNodes($(".list-wrap"));
+
+			function compileNodes($parent){
+				$parent.children().each(function(i, node){
+					var directives = [];
+					$.each(node.attributes, function(i1, attr){
+						if(/^m-/.test(attr.name)){
+							directives.push({
+								name: $.camelCase(attr.name),
+								value: attr.value
+							});
+						}
+					});
+					// console.log(directives);
+					if(directives.length > 0){
+						$.each(directives, function(i, o){
+							if(registeredDirectives[o.name]){
+								registeredDirectives[o.name](window, o.value, $(node));
+							}							
+						});
+					}
+
+					if($(node).children().length > 0){
+						compileNodes($(node));
+					}
+				});
+			}
+
+			// 疑问：遍历DOM节点树的时候可以从根节点开始递归遍历，也可以通过find方法把所有节点 子节点 孙节点 曾孙节点...都能拿到，为什么要选择递归遍历的形式呢？
+			// 在后面我们将会找到答案：因为有些指令，例如m-repeat=item in comments所在的元素及其子元素有一个独立作用域（item就是在独立的作用域对象上的属性而非外面的作用域），item不应该也不必在外面的作用域上遍历查找其对应的值
+
+			// 总体感受：代码非常混乱，耦合度很高
+			// 1、解析作用域上某个属性的值，或者调用作用域上某个方法可以单独抽成一块
+			// 2、所有的属性都放在了全局的作用域，希望能针对各块html分别
+			// 3、m-repeat指令希望有一个独立的作用域对象，指令所在节点和其子节点都可以用这个作用域对象
+			// 4、由于m-repeat节点里面需要独立的作用域，因此调用registeredDirectives["mRepeat"]的时候第一个参数需要是一个新的作用域对象，在函数里面应该把item属性扩展给新的作用域对象，思考：需不需要一个新的作用域对象取决于指令的功能，因此应该在指令内部定义，然后在执行registeredDirectives["mRepeat"]传值时传入，据此分析registeredDirectives里面的每个指令需要是一个对象，详情参考 案例分析2
+		});
+	</script>
 </head>
 <body>
 	<div class="list-wrap">
 		<div class="total-txt">共</div>
-		<div class="total-txt red num">15</div>
+		<div class="total-txt red num" m-bind="totalNum"></div>
 		<div class="total-txt">条评价</div>
 
 		<ul class="list">
-			<li class="item">
-				<div class="content">Ctrl+P、Ctrl+N作用相当于↑↓方向键的作用</div>
-				<a href="javascript:;" class="del">删除</a>
-			</li>
-			<li class="item">
-				<div class="content">Ctrl+P、Ctrl+N作用相当于↑↓方向键的作用</div>
-				<a href="javascript:;" class="del">删除</a>
-			</li>
-			<li class="item">
-				<div class="content">Ctrl+P、Ctrl+N作用相当于↑↓方向键的作用</div>
+			<li class="item" m-repeat="item in comments">
+				<div class="content" m-bind="item"></div>
 				<a href="javascript:;" class="del">删除</a>
 			</li>
 		</ul>
