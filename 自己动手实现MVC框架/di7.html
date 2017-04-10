@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>2017年3月22日10:53:39</title>
+	<script src="jquery-2.2.4.js"></script>
+	<script>
+		// 整个Angular实际上是一个大的观察者模式的实现体，平常的开发，即往module上绑controller directive service的时候是订阅的过程，而发布过程在Angular内部完成
+		function setupModuleLoader() {
+			var angular = {};
+
+			angular.module = function(name, requires) {
+				var modules = {};
+				if(requires) {
+					return createModule(name, requires, modules);
+				} else {
+					return getModule(name, modules);
+				}
+			};
+
+			function createModule(name, requires) {
+				var invokeQueue = [];
+				var invokeLater = function(method) {
+					// function(key, value) {
+					// 	invokeQueue.push(["constant", [key, value]]);
+					// }
+					return function() {
+						invokeQueue.push([method, arguments]);
+						return moduleInstance;
+					};
+				};
+				var moduleInstance = {
+					name: name,
+					requires: requires,
+					constant: invokeLater("constant"),
+					provider: invokeLater("provider"),
+					_invokeQueue: invokeQueue
+				};
+				return modules[name] = moduleInstance;
+			}
+
+			function getModule(name){
+				return modules[name];
+			}
+		}
+
+
+
+
+
+
+
+
+		// 通过构造函数注册供应商时构造函数中不可以注入供应商实例，即下面test构造函数中注入的a是错的，但是test1构造函数中注入的b是对的
+		// module.provider("a", function() {
+		// 	this.$get = function() {};
+		// });
+		// module.provider("test", function(a) {
+		// 	this.$get = function() {};
+		// });
+		//============================================================================================================================
+		// module.constant("b", 1);
+		// module.provider("test1", function(b) {
+		// 	this.$get = function() {};
+		// });
+
+		// 而实例函数智中绝对不能注入供应商，即下面test对象的$get方法中注入aProvider供应商时错误的
+		// module.provider("a", function() {
+		// 	this.$get = function() {};
+		// });
+		// module.provider("test", {
+		// 	$get: function(aProvider) {}
+		// });
+
+		// 不管是通过构造函数注册供应商，还是直接通过实例注册供应商，供应商的名字都不必也不应以Provider结尾，因为注入器内部会加上这个后缀，如果自己加了不利于内部解析
+
+
+		// 供应商也通过构造函数的方式注入模块，而不直接以对象形式注入
+
+		// 注入器
+		// 注入器的目的，为了降低函数执行过程中的耦合度
+
+
+		// 参数modulesToLoad形式：["module1", "module2", "module3"]
+		function createInjector(modulesToLoad) {
+			// 将实例以及供应商分开存储，实例存到instanceCache中，供应商存到providerCache中
+			var instanceCache = {};
+			var providerCache = {};
+			var loadedModules = {};
+
+			var $provide = {
+				constant: function(key, value) {
+					instanceCache[key] = value;
+				},
+				provider: function(key, provider) {
+					// provider.$get对应的实例化对象会最终被添加到instanceCache中，但为了延迟加载，此处将不直接实例化，而是将其转存在providerCache中
+					// instanceCache[key] = invoke(provider.$get, provider);
+					if(Object.prototype.toString.call(provider) == "[object Function]") {
+						provider = instantiate(provider);
+					}
+					providerCache[key + "Provider"] = provider;
+				}
+			};
+
+			function invoke(fn, self) {
+				// 抽离参数
+				var injectArgs = fn.toString().match(/(?:^function\s+[a-zA-Z_$]*\((.*)\))/)[1].split(",").map(function(o){
+					return o.trim();
+				});
+				// 获取实参
+				var args = $.map(injectArgs, function(token) {
+					return getService(token);
+				});
+				// 调用
+				return fn.apply(self, args);
+			}
+
+			function instantiate(ConstrFn) {
+				// 相当于new ConstrFn()
+				var instance = Object.create(ConstrFn.prototype);
+				invoke(ConstrFn, instance);
+				return instance;
+			}
+
+			function getService(name) {
+				if(instanceCache.hasOwnProperty(name)){
+					return instanceCache[name];
+				} else if (providerCache.hasOwnProperty(name)) {
+					// 直接通过构造函数的方式添加供应商时，形如：
+					// module.provider("testProvider", function() {
+					// 	this.$get = function() {};
+					// });
+					return providerCache[name];
+				} else if (providerCache.hasOwnProperty(name + "Provider")) {
+					// 直接写一个对象字面量添加供应商对象，形如：
+					// module.provider("test", {
+					// 	$get: function(a, b) {}
+					// });
+					var provider = providerCache[name + "Provider"];
+					var instance = instanceCache[name] = invoke(provider.$get);
+					return instance;
+				}
+			}
+
+			$.each(modulesToLoad, function loadModule(index, moduleName) {
+				if(loadedModules[moduleName]) {
+					loadedModules[moduleName] = true;
+					var module = angular.module(moduleName);
+					$.each(module.requires, loadModule);
+					$.each(module._invokeQueue, function(invokeIndex, invokeArgs) {
+						var method = invokeArgs[0];
+						var args = invokeArgs[1];
+						$provide[method].apply($provide, args);
+					});
+				}
+			});
+			return {
+				has: function(name) {
+					return instanceCache.hasOwnProperty(name) || providerCache.hasOwnProperty(name + "Provider");
+				},
+				get: getService,
+				invoke: invoke,
+				instantiate: instantiate
+			};
+		}
+	</script>
+</head>
+<body>
+	
+</body>
+</html>

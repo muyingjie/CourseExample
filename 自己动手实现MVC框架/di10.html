@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>2017年3月22日16:29:26</title>
+	<script src="jquery-2.2.4.js"></script>
+	<script>
+		// 整个Angular实际上是一个大的观察者模式的实现体，平常的开发，即往module上绑controller directive service的时候是订阅的过程，而发布过程在Angular内部完成
+		function setupModuleLoader() {
+			var angular = {};
+
+			angular.module = function(name, requires) {
+				var modules = {};
+				if(requires) {
+					return createModule(name, requires, modules);
+				} else {
+					return getModule(name, modules);
+				}
+			};
+
+			function createModule(name, requires) {
+				var invokeQueue = [];
+				var configBlocks = [];
+
+				var invokeLater = function(service, method, arrayMethod, queue) {
+					return function() {
+						queue = queue || invokeQueue;
+						queue[arrayMethod || "push"]([service, method, arguments]);
+						return moduleInstance;
+					};
+				};
+				var moduleInstance = {
+					name: name,
+					requires: requires,
+					constant: invokeLater("$provide", "constant", "unshift"),
+					provider: invokeLater("$provide", "provider"),
+					factory: invokeLater("$provide", "factory"),
+					value: invokeLater("$provide", "value"),
+					service: invokeLater("$provide", "service"),
+					config: invokeLater("$injector", "invoke", "push", configBlocks),
+					run: function(fn) {
+						moduleInstance._runBlocks.push(fn);
+						return moduleInstance;
+					},
+					_invokeQueue: invokeQueue,
+					_configQueue: configBlocks,
+					_runBlocks: []
+				};
+				return modules[name] = moduleInstance;
+			}
+
+			function getModule(name){
+				return modules[name];
+			}
+		}
+
+
+
+
+
+
+
+		// 总结：如果想要不关心加载顺序，即先运行的服务可以执行后加载的服务，必须要做延迟加载，延迟加载会先将所有服务放到某一缓存，这样用到哪个实例化哪个，就会看起来像是加载顺序无关
+
+		function createInjector(modulesToLoad) {
+			var loadedModules = {};
+
+			var providerCache = {};
+			// 供应商缓存中如果依然找不到名为name的注入项，则报错
+			var providerInjector = providerCache.$injector = createInternalInjector(providerCache, function() {
+				throw "找不到对应的服务";
+			});
+
+			var instanceCache = {};
+			// 在实例缓存里面找名为name的注入项，如果找不到，则去供应商缓存中找
+			var instanceInjector = instanceCache.$injector = createInternalInjector(instanceInjector, function(name) {
+				var provider = providerInjector.get(name + "Provider");
+				return instanceInjector.invoke(provider.$get, provider);
+			});
+
+			// 可以通过在供应商构造函数中注入$provide服务，这样就可以在全局注入器创建时（即调用createInjector时）才调用constant注册常量，或调用provider注册服务
+			// 在$get实例化的过程中不可以注入$provide服务
+			providerCache.$provide = {
+				constant: function(key, value) {
+					providerCache[key] = value;
+					instanceCache[key] = value;
+				},
+				provider: function(key, provider) {
+					if(Object.prototype.toString.call(provider) == "[object Function]") {
+						provider = providerInjector.instantiate(provider);
+					}
+					providerCache[key + "Provider"] = provider;
+				},
+				factory: function(key, factoryFn) {
+					this.provider(key, {
+						$get: factoryFn
+					});
+				},
+				value: function(key, value) {
+					this.factory(key, _.constant(value));
+				},
+				service: function(key, Constructor) {
+					this.factory(key, function() {
+						return instanceInjector.instantiate(Constructor);
+					});
+				}
+			};
+
+			// 在对应的缓存对象中如果找不到对象，则调用factoryFn
+			function createInternalInjector(cache, factoryFn) {
+				function getService(name) {
+					if(cache.hasOwnProperty(name)){
+						return cache[name];
+					} else {
+						return cache[name] = factoryFn(name);
+					}
+				}
+
+				function invoke(fn, self) {
+					// 抽离参数
+					var injectArgs = fn.toString().match(/(?:^function\s+[a-zA-Z_$]*\((.*)\))/)[1].split(",").map(function(o){
+						return o.trim();
+					});
+					// 获取实参
+					var args = $.map(injectArgs, function(token) {
+						return getService(token);
+					});
+					// 调用
+					return fn.apply(self, args);
+				}
+
+				function instantiate(ConstrFn) {
+					// 相当于new ConstrFn()
+					var instance = Object.create(ConstrFn.prototype);
+					invoke(ConstrFn, instance);
+					return instance;
+				}
+
+				return {
+					has: function(name) {
+						return cache.hasOwnProperty(name) || providerCache.hasOwnProperty(name + "Provider");
+					},
+					get: getService,
+					invoke: invoke,
+					instantiate: instantiate
+				};
+			}
+
+			function runInvokeQueue(queue) {
+				$.each(queue, function(invokeIndex, invokeArgs) {
+					// service参数是关键，providerInjector对象下的一个子属性名
+					var service = providerInjector.get(invokeArgs[0]);
+					var method = invokeArgs[1];
+					var args = invokeArgs[2];
+					// $provide[method].apply($provide, args);
+					service[method].apply(service, args);
+				});
+			}
+
+			var runBlocks = [];
+			$.each(modulesToLoad, function loadModule(index, moduleName) {
+				if(loadedModules[moduleName]) {
+					loadedModules[moduleName] = true;
+					var module = angular.module(moduleName);
+					$.each(module.requires, loadModule);
+					runInvokeQueue(module._invokeQueue);
+					runInvokeQueue(module._configQueue);
+					$.each(module._runBlocks, function(runBlock) {
+						instanceInjector.invoke(runBlock);
+					});
+				}
+			});
+
+			return instanceInjector;
+		}
+	</script>
+</head>
+<body>
+	
+</body>
+</html>

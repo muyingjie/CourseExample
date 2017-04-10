@@ -24,12 +24,39 @@
 				window.comments.push(window.comment);
 			};
 			window.watchList = [];
-			window.watch = function(watchFn, listenerFn){
+			window.watch = function(watchFn, listenerFn, fnCompare){
 				this.watchList.push({
 					watchFn: watchFn,
 					listenerFn: listenerFn,
 					last: {
 						lastValueSign: "lastValueSign"
+					},
+					fnCompare: fnCompare ? fnCompare : function(oldValue, newValue) {
+						if(oldValue !== newValue) {
+							return true;
+						} else if(Object.prototype.toString.call(newValue) == "[object Array]") {
+							return newValue.length !== oldValue.length;
+						} else if(Object.prototype.toString.call(newValue) == "[object Object]") {
+							var isDirty = false;
+							// 遍历新的对象，如果值有变化，则不相等
+							for(var attr in newValue){
+								if(newValue[attr] !== oldValue[attr]) {
+									isDirty = true;
+									break;
+								}
+							}
+							// 遍历老的对象，如果值有变化，则不相等
+							for(var attr in oldValue){
+								if(newValue[attr] !== oldValue[attr]) {
+									isDirty = true;
+									break;
+								}
+							}
+							return isDirty;
+						} else {
+							// 如果都不满足，跳过本次检测
+							return false;
+						}
 					}
 				});
 			};
@@ -50,17 +77,24 @@
 				var _this = this;
 				$.each(this.watchList, function(i, o){
 					var newValue = o.watchFn(_this);
-					if(o.last !== newValue){
+					// if(o.last !== newValue){
+					if(o.fnCompare(o.last, newValue)){
 						o.listenerFn && o.listenerFn(newValue);
 					}
 					o.last = newValue;
 				});
 				if(this.childrenScope.length >= 0){
-					// 这里虽然遍历的是childrenScope，但是里面每个childScope都指向window，由于childScope并没有childrenScope属性，因此还是会找到window上的childrenScope属性，依然遍历window上的childrenScope，陷入死递归，这样一来，貌似只执行一次window上的apply就可以把所有的watch遍历完，但是这样做对于子scope的控制就大大降低，因此还是要有父子级scope关系的，我们可以自己给window创建一个方法，然后通过该方法创建新的scope对象，这个对象将包含新的childrenScope引用，这样就不会受父级childrenScope的影响了
-					// $.each(this.childrenScope, function(i, scope) {
-					// 	scope.apply();
-					// });
+					// 这里虽然遍历的是childrenScope，但是里面每个childScope都指向window，由于childScope并没有childrenScope属性，因此还是会找到window上的childrenScope属性，依然遍历window上的childrenScope，陷入死递归，但同时也不能
+					$.each(this.childrenScope, function(i, scope) {
+						scope.apply();
+					});
 				}
+			};
+			window.createNewScope = function() {
+				var newScope = Object.create(window);
+				newScope.watchList = [];
+				newScope.childrenScope = [];
+				return newScope;
 			};
 			window.childrenScope = [];
 
@@ -81,16 +115,26 @@
 						var key = res[1];
 						// 父级作用域上的数据
 						var group = scope[res[2]];
+						scope.watch(function() {
+							return group;
+						}, function() {
+							// 刷新整个列表结构
+						});
 						
 						var $parent = $ele.parent();
 
 						$.each(group, function(k, v){
 							var $cloneEle = $ele.clone();
-							var childScope = {};
-							childScope.__proto__ = window;
-							//此处需要继承父对象
-							scope.childrenScope.push(childScope);
+							// var childScope = {};
+							// childScope.__proto__ = window;
+							// window.childrenScope.push(childScope);
+							var childScope = scope.createNewScope();
 							childScope[key] = v;
+							childScope.watch(function() {
+								return childScope[key];
+							}, function() {
+								
+							});
 							compileNodes($cloneEle, childScope);
 							$parent.append($cloneEle);
 						});
@@ -155,17 +199,16 @@
 						compileNodes($(node), scope, curTerminal);
 					}
 				});
-				// 绝不可以在这里执行脏检测，compileNode这个函数会遍历到其子元素，每遍历到一个子元素就执行一次$apply，而$apply内部又把作用域树遍历一遍，就造成了栈溢出
-				// scope.apply();
 			}
 
-			// 目前问题在于当我们点击完之后评论数量没有变，列表也没有更新，于是我们需要设计一种机制：在click事件触发时变更DOM
-			// 接下来的问题是要变更哪些DOM？其实我们可以这样想：哪些DOM会因为我们的点击事件而变化，通过分析发现显示总条数和评价列表这些DOM会变，因此答案也很简单，应该是去更新当前所处的作用域上的那些DOM
-			// 实际的变化是很复杂的，有可能改变了当前作用域对象上的某个属性，其他很多属性会变，因此我们很容易想到一种机制：当作用域对象上一个属性变化时，就遍历作用域对象上所有的属性，看看哪些变了，执行相应的操作，所谓的相应的操作其实就是改变DOM的操作
-			// 想要改变DOM必须要做监听，所谓监听就是监视数据变化，数据一旦变化就改变DOM————问题：我们需要把当前所处作用域的所有DOM都监听了吗？答案是No，结合上一条分析我们也可以发现只需要监听那些和作用域上绑定的数据相关的DOM，比如m-bind m-repeat等所处的DOM，说白了就是指令所在的DOM
-			// 监听具体实现：要在外面定义一个数组存放所有监听的对象，形成一个队列，外部在数据改变时触发这个队列，在此处就是外部在输入内容或者点击元素时（oninput和onclick发生时），循环该队列，执行绑定的函数，由于绑定的函数里面有可能改变其他数据，因此循环完一遍以后可能还需要更新数据，因此需要进行多次循环，知道没有最新的数据为止
-			// m-repeat指令里面的各项都是独立作用域，现在外层作用域变化时需要更改内层作用域下的DOM及其数据，但是目前我们的内外层作用域没有任何关系，因此现在还需要将二者关联起来，在此我们采用对象的继承机制
-			// 对象继承时很容易想到通过prototype或__proto__继承，但是在遍历watchList是就会出现栈溢出的现象，这是因为scope是一个树形结构，从根节点遍历，然后判断是否有子节点，如果有子节点就接着遍历其watchList，但是如果是原型继承的话，当执行child.watch(xxx);的时候由于child没有watchList属性，因此去父级找，最终所有的watchList全都push到父级的watchList上了，在$apply遍历执行各个watch时虽然遍历到了各个子节点，但是实际上遍历的却是父级的watchList，而且每个子节点都会找到最顶级的父节点遍历一遍
+			// 本例中除了改进继承方式之外，把m-repeat部分也加上了监听
+			// 目前我们的基本思路是在涉及到数据绑定和渲染的指令（例如m-bind m-repeat）的render函数里面绑定watch，涉及到和用户交互的指令（m-click m-input）的render里面执行apply，而执行apply的过程中会遍历所有绑定的watch监听函数，此时一定还会走各个指令的render函数，然后在render里面又会往watchList添加一些监听函数，watchList会变得越来越大，从而永远也没法走完一个apply
+			// 要解决上述问题，我们可以把添加watch和apply遍历执行分开
+			// 对于mRepeat来说，我们监听的属性类型是对象或数组，对于这些类型的属性我们主要关注它的长度是否改变或者里面某个属性的值是否改变，而且经历的apply次数比较多，因此应该提供一种高效的方法来检测其变化，我们可以封装一个watchCollection来实现这个需求
+			// 在每个watch的监听函数中不可以调用apply，因为调用apply时就会把各个watch上的监听函数循环执行一遍，执行这些函数的过程中如果还调了apply，就会形成循环调用
+
+
+			// 后期考虑：从上述实现可见，我们在window上绑定了太多的东西，这是极其不好的一件事情，因此我们最好把scope单独抽出成一个独立的类，当用到的时候实例化，后期我们不仅会遇到作用域继承的情况，还会遇到独立作用域的情况，独立作用域就需要重新new出来一个scope对象了，因此从各方面考虑scope都应该抽成独立的类
 		});
 	</script>
 </head>

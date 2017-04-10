@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>2017年3月21日16:37:09</title>
+	<script src="jquery-2.2.4.js"></script>
+	<script>
+		// 整个Angular实际上是一个大的观察者模式的实现体，平常的开发，即往module上绑controller directive service的时候是订阅的过程，而发布过程在Angular内部完成
+		function setupModuleLoader() {
+			var angular = {};
+
+			angular.module = function(name, requires) {
+				var modules = {};
+				if(requires) {
+					return createModule(name, requires, modules);
+				} else {
+					return getModule(name, modules);
+				}
+			};
+
+			function createModule(name, requires) {
+				var invokeQueue = [];
+				var moduleInstance = {
+					name: name,
+					requires: requires,
+					constant: function(key, value) {
+						invokeQueue.push(["constant", [key, value]]);
+					},
+					_invokeQueue: invokeQueue
+				};
+				return modules[name] = moduleInstance;
+			}
+
+			function getModule(name){
+				return modules[name];
+			}
+		}
+
+
+
+
+
+
+
+
+
+
+
+		// 注入器
+		// 参数modulesToLoad形式：["module1", "module2", "module3"]
+		function createInjector(modulesToLoad) {
+			var cache = {};
+			var loadedModules = {};
+
+			var $provide = {
+				constant: function(key, value) {
+					cache[key] = value;
+				}
+			};
+
+			$.each(modulesToLoad, function loadModule(index, moduleName) {
+				if(loadedModules[moduleName]) {
+					loadedModules[moduleName] = true;
+					var module = angular.module(moduleName);
+					$.each(module.requires, loadModule);
+					$.each(module._invokeQueue, function(invokeIndex, invokeArgs) {
+						var method = invokeArgs[0];
+						var args = invokeArgs[1];
+						$provide[method].apply($provide, args);
+					});
+				}
+			});
+			return {
+				has: function(name) {
+					return cache.hasOwnProperty(name);
+				},
+				get: function(name) {
+					return cache[name];
+				}
+			};
+		}
+	</script>
+</head>
+<body>
+	
+</body>
+</html>
