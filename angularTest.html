@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="angular-1.2.32.js"></script>
+    <script>
+        var app = angular.module("app", []);
+        app.controller("TestController", ["$scope", function($scope) {
+            $scope.arr = [1, 2, 3, 4];
+
+            $scope.reduce = function () {
+                $scope.arr.pop();
+            };
+        }]);
+    </script>
+</head>
+<body ng-app="app">
+    <div ng-controller="TestController">
+        <ul ng-repeat="item in arr">
+            <li>{{item}}</li>
+        </ul>
+        <input type="button" value="减长度" ng-click="reduce()" />
+    </div>
+</body>
+</html>

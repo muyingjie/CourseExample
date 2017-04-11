@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        *{ margin: 0; padding: 0; list-style: none; text-decoration: none; color: #222; box-sizing: content-box; vertical-align: middle;}
+        .list-wrap{ margin: 50px; padding: 30px; border: 1px solid #ccc; }
+        .list-wrap .total-txt{ display: inline-block; }
+        .list-wrap .total-txt.red{ color: red; }
+        .list-wrap .list{ margin-top: 30px; width: 500px; }
+        .list-wrap .list .item{ line-height: 30px; border-bottom: 1px dashed #000; }
+        .list-wrap .list .item .content,.list-wrap .list .item .del{ display: inline-block; }
+        .list-wrap .list .item .del{ color: red; }
+        .list-wrap .comment-wrap{ margin-top: 30px; }
+        .list-wrap input{ height: 20px; }
+    </style>
+    <script src="../jquery-1.12.4.js"></script>
+    <script>
+        $(function(){
+            window.comments = ["aaa", "bbb", "ccc"];
+            window.totalNum = comments.length;
+            window.comment = "";
+            window.addComment = function(){
+                window.comments.push(window.comment);
+            };
+            window.watchList = [];
+            window.watch = function(watchFn, listenerFn, fnCompare){
+                this.watchList.push({
+                    watchFn: watchFn,
+                    listenerFn: listenerFn,
+//                    last: {
+//                        lastValueSign: "lastValueSign"
+//                    },
+                    last: function (){},
+                    fnCompare: fnCompare ? fnCompare : function(oldValue, newValue) {
+                        if(oldValue !== newValue) {
+                            return true;
+                        } else if(Object.prototype.toString.call(newValue) == "[object Array]") {
+                            return newValue.length !== oldValue.length;
+                        } else if(Object.prototype.toString.call(newValue) == "[object Object]") {
+                            var isDirty = false;
+                            // 遍历新的对象，如果值有变化，则不相等
+                            for(var attr in newValue){
+                                if(newValue[attr] !== oldValue[attr]) {
+                                    isDirty = true;
+                                    break;
+                                }
+                            }
+                            // 遍历老的对象，如果值有变化，则不相等
+                            for(var attr in oldValue){
+                                if(newValue[attr] !== oldValue[attr]) {
+                                    isDirty = true;
+                                    break;
+                                }
+                            }
+                            return isDirty;
+                        } else {
+                            // 如果都不满足，跳过本次检测
+                            return false;
+                        }
+                    }
+                });
+            };
+            window.apply = function(){
+                // $.each(window.watchList, function(i, o){
+                // 	var newValue = o.watchFn(window);
+                // 	if(o.last !== newValue){
+                // 		o.listenerFn && o.listenerFn();
+                // 	}
+                // 	o.last = newValue;
+                // });
+                // if(window.childrenScope.length >= 0){
+                // 	$.each(window.childrenScope, function(i, scope) {
+                // 		scope.apply();
+                // 	});
+                // }
+                // 需要把上述代码中的window改成this
+                var _this = this;
+                $.each(this.watchList, function(i, o){
+                    var newValue = o.watchFn(_this);
+                    // if(o.last !== newValue){
+                    if(o.fnCompare(o.last, newValue)){
+                        o.listenerFn && o.listenerFn(newValue, o.last);
+                    }
+                    o.last = newValue;
+                });
+                if(this.childrenScope.length > 0){
+                    // 这里虽然遍历的是childrenScope，但是里面每个childScope都指向window，由于childScope并没有childrenScope属性，因此还是会找到window上的childrenScope属性，依然遍历window上的childrenScope，陷入死递归，但同时也不能
+                    $.each(this.childrenScope, function(i, scope) {
+                        scope.apply();
+                    });
+                }
+            };
+            window.createNewScope = function() {
+                var newScope = Object.create(window);
+                newScope.watchList = [];
+                newScope.childrenScope = [];
+                this.childrenScope.push(newScope);
+                return newScope;
+            };
+            window.childrenScope = [];
+
+            var registeredDirectives = {
+                "mBind": {
+                    render: function(scope, value, $ele){
+                        scope.watch(function() {
+                            return scope[value];
+                        }, function(newValue) {
+                            $ele.text(newValue);
+                        });
+                    }
+                },
+                "mRepeat": {
+                    terminal: true,
+                    render: function(scope, value, $ele){
+                        var res = value.match(/\s*([$_a-zA-Z]\w+)\s*in\s*([$_a-zA-Z]\w+)\s*/);
+                        var key = res[1];
+                        // 父级作用域上的数据
+                        var group = scope[res[2]];
+                        var $parent = $ele.parent();
+                        var $orgEle = $ele.clone();
+
+                        scope.watch(function() {
+                            return group;
+                        }, function(newGroup, lastGroup) {
+                            var addGroup = [];
+                            var removeGroup = [];
+                            // newGroup里面有的，而lastGroup里面没有的就应该是需要新增的
+                            $.each(newGroup, function(nk, nv){
+                                var isFind = false;
+                                $.each(lastGroup, function(lk, lv){
+                                    if(nv == lv){
+                                        isFind = true;
+                                    }
+                                });
+                                // 找了一遍依然没有找到相同的，那确实就是新加的
+                                if(isFind == false){
+                                    addGroup.push(nv);
+                                }
+                            });
+                            // newGroup里面没有的，而lastGroup里面有的就应该是需要删除的
+                            $.each(lastGroup, function (lk, lv) {
+                                var isFind = false;
+                                $.each(newGroup, function(nk, nv){
+                                    if(lv == nv){
+                                        isFind = true;
+                                    }
+                                });
+                                if(isFind == false){
+                                    removeGroup.push(lv);
+                                }
+                            });
+                            // 对于addKeys应该添加watch
+                            $.each(addGroup, function(k, v){
+                                var $cloneEle = $orgEle.clone();
+                                $parent.append($cloneEle);
+                                // 解析子级，每个子级都是一个独立作用域
+                                var childScope = scope.createNewScope();
+                                childScope[key] = v;
+                                compileNodes($cloneEle, childScope, false);
+                            });
+                            // 对于removeKeys应该删除watch，DOM对象和实例化对象的对应该如何做呢？
+                            $.each(removeGroup, function (k, v) {
+
+                            });
+                        });
+
+                        $ele.remove();
+                    }
+                },
+                "mValue": {
+                    render: function(scope, value, $ele){
+                        // 暂时通过事件监听来实现一下
+                        $ele.on("input", function(){
+                            scope[value] = $(this).val();
+                            scope.apply();
+                        });
+                    }
+                },
+                "mClick": {
+                    render: function(scope, value, $ele){
+                        $ele.on("click", function(){
+                            scope[value] && scope[value]();
+                            scope.apply();
+                        });
+                    }
+                }
+            };
+
+            compileNodes($(".list-wrap"));
+            window.apply();
+
+            function compileNodes($parent, scope, terminal){
+                scope = scope || window;
+                if(terminal == undefined){
+                    terminal = false;
+                }
+                if(terminal){
+                    return;
+                }
+                $parent.children().each(function(i, node){
+                    var directives = [];
+                    // 指令的收集过程
+                    $.each(node.attributes, function(i1, attr){
+                        if(/^m-/.test(attr.name)){
+                            directives.push({
+                                name: $.camelCase(attr.name),
+                                value: attr.value
+                            });
+                        }
+                    });
+                    var curTerminal = false;
+                    // 指令的实例化过程
+                    if(directives.length > 0){
+                        $.each(directives, function(i, o){
+                            var curDirect = registeredDirectives[o.name];
+                            if(curDirect.terminal){
+                                curTerminal = true;
+                            }
+                            if(curDirect){
+                                var orgValue = o.value.replace(/\(\)/g, "");
+                                curDirect.render && curDirect.render(scope, orgValue, $(node));
+                            }
+                        });
+                    }
+
+                    if($(node).children().length > 0 && !curTerminal){
+                        compileNodes($(node), scope, curTerminal);
+                    }
+                });
+            }
+
+
+        });
+
+
+
+//        之所以让每个watch默认的last是函数类型，是因为函数类型里没有属性可以通过for in循环得到
+//        var afn = function(){};
+//
+//        for(var attr in afn){
+//            console.log(attr, afn[attr]);
+//        }
+    </script>
+</head>
+<body>
+<div class="list-wrap">
+    <div class="total-txt">共</div>
+    <div class="total-txt red num" m-bind="totalNum"></div>
+    <div class="total-txt">条评价</div>
+
+    <ul class="list">
+        <li class="item" m-repeat="item in comments">
+            <div class="content" m-bind="item"></div>
+            <a href="javascript:;" class="del">删除</a>
+        </li>
+    </ul>
+
+    <div class="comment-wrap">
+        <input type="text" class="comment" m-value="comment" />
+        <input type="button" value="发表评价" class="publish-comment" m-click="addComment()">
+    </div>
+</div>
+</body>
+</html>

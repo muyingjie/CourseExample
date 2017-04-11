@@ -120,7 +120,7 @@
 						}, function() {
 							// 刷新整个列表结构
 						});
-						
+
 						var $parent = $ele.parent();
 
 						$.each(group, function(k, v){
@@ -133,7 +133,7 @@
 							childScope.watch(function() {
 								return childScope[key];
 							}, function() {
-								
+
 							});
 							compileNodes($cloneEle, childScope);
 							$parent.append($cloneEle);
