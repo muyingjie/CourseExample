@@ -41,9 +41,7 @@
 //                    },
                     last: function (){},
                     fnCompare: fnCompare ? fnCompare : function(oldValue, newValue) {
-                        if(oldValue !== newValue) {
-                            return true;
-                        } else if(Object.prototype.toString.call(newValue) == "[object Array]") {
+                        if(Object.prototype.toString.call(newValue) == "[object Array]") {
                             return newValue.length !== oldValue.length;
                         } else if(Object.prototype.toString.call(newValue) == "[object Object]") {
                             var isDirty = false;
@@ -62,6 +60,8 @@
                                 }
                             }
                             return isDirty;
+                        } else if(oldValue !== newValue) {
+                            return true;
                         } else {
                             // 如果都不满足，跳过本次检测
                             return false;
@@ -70,6 +70,13 @@
                 });
             };
             window.apply = function(){
+                // 如果单次脏检测发现有和上次不一样的属性，则一直循环
+                var isDirty = true;
+                while(isDirty){
+                    isDirty = this.applyOnce();
+                }
+            };
+            window.applyOnce = function(){
                 // $.each(window.watchList, function(i, o){
                 // 	var newValue = o.watchFn(window);
                 // 	if(o.last !== newValue){
@@ -84,6 +91,8 @@
                 // }
                 // 需要把上述代码中的window改成this
                 var _this = this;
+                // 是否有和上次不一样的属性
+                var isDirty = false;
                 $.each(this.watchList, function(i, o){
                     var newValue = o.watchFn(_this);
                     var newValueType = Object.prototype.toString.call(newValue);
@@ -96,6 +105,8 @@
                         } else {
                             o.last = newValue;
                         }
+                        // 只要有一个不一样，就代表变脏了
+                        isDirty = true;
                     }
                 });
                 if(this.childrenScope.length > 0){
@@ -104,6 +115,7 @@
                         scope.apply();
                     });
                 }
+                return isDirty;
             };
             window.createNewScope = function() {
                 var newScope = Object.create(window);
@@ -270,16 +282,13 @@
 
         });
 
+//        本代码出的问题是在apply判断修改前后两个值是否相等时除了问题，由于对于数组和对象来说我们做的处理是深拷贝，因此肯定不是同一个对象，于是第一个分支oldValue !== newValue就直接返回了，此处需要修改
+//        还有一个遗留的问题，点添加评论，确实能够加上，但是评论总条数没变，这个问题后期解决
 
-
-//        之所以让每个watch默认的last是函数类型，是因为函数类型里没有属性可以通过for in循环得到
-//        var afn = function(){};
-//
-//        for(var attr in afn){
-//            console.log(attr, afn[attr]);
-//        }
-
-//        虽然我们可以点击发表评价从而在页面上添加一条条评价，但是我们发现评论总条数并没有改变，这是因为当我们的apply在执行某个watch监听函数时可能同时会使其他的watch所监听的属性发生改变，而目前我们只把watch遍历了一遍，遍历的这一遍如果影响到了其他watch的话就没有再管了，因此我们需要为整体的脏检测（即不停遍历直到所有的watch绑定的属性的值都没有和之前不一样的了）和一次脏检测分别开两个方法
+        //        通过上述代码我们基本上理解了编译DOM的过程，接下来总结一下这里面出现的问题同时也是我们接下来继续实现并完善这个框架的基础：
+        //        1、window上绑定了太多的东西，太乱了，一定要封装一个scope构造函数
+        //        2、编译节点时，直接传入要编译的节点，而不传父节点，这样看起来更直观
+        //        3、我们的m-bind里面的内容如果是aaa.bbb、1 + 2的形式就有可能挂了，此外我们的删除功能如果绑定了m-click = "delComment(item)"，即往进传一些参数的时候也不支持，我们这里在编译的时候就把delComment(item)中的括号去掉了，这只是我们临时处理一下，说了这么多，就是想引出另外一个功能：表达式的编译，对于m-bind，我们在该指令的实现中创建了一个函数来返回当前作用域的key对应的值，而对于m-click这类交互类型的指令，我们也需要创建一个函数来作为事件的监听函数，因此我们可以总结出，对于一个表达式，我们将该表达式中的各项看成是当前scope的属性，并希望得到一个返回其值的函数，scope可以作为参数传入，并且所有的事件应该都有这个流程，因此我们可以对所有的事件统一处理
     </script>
 </head>
 <body>
