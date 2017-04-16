@@ -1,6 +1,6 @@
-ECMA标准
+﻿ECMA标准
 ↓
-MVC
+MVC框架
 ↓
 JavaScript设计模式与开发实践
 ↓
@@ -16,6 +16,8 @@ angular源码
 ↓
 编译原理
 ↓
+编译系统透视
+↓
 操作系统设计与实现
 ↓
 PHP/Java
@@ -27,6 +29,8 @@ C/C++
 数据结构 算法 设计模式
 ↓
 TCP/IP
+↓
+HTTP权威指南
 ↓
 Linux
 ↓
