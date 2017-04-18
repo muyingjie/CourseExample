@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>表达式编译——数字编译</title>
+    <title>表达式编译——字符串编译</title>
+    <script src="kernal.js"></script>
     <script>
         // 词法分析
         function getTokens (text){
@@ -15,6 +16,8 @@
                 curCharacter = text.charAt(index);
                 if (isNumber(curCharacter) || curCharacter == '.') {
                     readNumber();
+                } else if (curCharacter == '\'' || curCharacter == '\"') {
+                    readString();
                 }
             }
 
@@ -43,6 +46,27 @@
                     text: number,
                     value: Number(number)
                 });
+            }
+
+            function readString(){
+                index++;
+                var string = "";
+                while(index < text.length){
+                    var ch = text.charAt(index);
+                    // 如果到了字符串结尾
+                    if (ch == curCharacter) {
+                        index++;
+                        tokens.push({
+                            text: string,
+                            value: string
+                        });
+                        return;
+                    } else {
+                        string += ch;
+                    }
+                    index++;
+                }
+                throw "Unmatched quote";
             }
 
             function getNextCharacter(){
@@ -92,7 +116,16 @@
                         );
                         break;
                     case astType.Literal:
-                        return ast.value;
+                        return escape(ast.value);
+                }
+            }
+            // 常量转义
+            // 字符串 abc -> 'abc'
+            function escape(value){
+                if (myj.isString(value)) {
+                    return '\'' + value + '\'';
+                } else {
+                    return value;
                 }
             }
             // 将收集的组成的监听函数的片段拼接成函数
@@ -109,19 +142,8 @@
             return getExprWatchFn(ast).toString();
         }
 
-        var watchFn = parse("12");
-        var watchFn1 = parse("4.2");
-        var watchFn2 = parse(".42");
-        console.log(watchFn);
+        var watchFn1 = parse("'abc'");
         console.log(watchFn1);
-        console.log(watchFn2);
-        
-        // 由于科学计数法用的较少，而且算法实现很复杂，因此不再做处理
-        // 此外在这个版本中暴露出了一个问题就是函数之间的耦合度过高，具体表现为参数之间的依赖关系过于紧密
-        // 因为没有使用面向对象而很多函数需要共用某些变量（这些变量在使用了面向对象之后就可以变成属性从而可以在成员方法之间共用）
-        // 而我们又不想污染全局变量，因此只能通过参数传递，虽然我们也可以在getTokens里面定义私有函数
-        // 但是个人感觉对于浏览器解释Js并不太友好
-        // 不过为了便于理解我们先这样实现，到了后面就会将其换成面向对象的写法
     </script>
 </head>
 <body>
