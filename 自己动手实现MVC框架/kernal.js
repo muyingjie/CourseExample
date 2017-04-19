@@ -36,6 +36,25 @@
             myj.error("参数o非法");
         }
     };
+    myj.map = function (o, fn, context) {
+        var res = [];
+        if (typeof o == "object") {
+            if (o.length != undefined && o.length > 0) {
+                // 数组
+                for (var i = 0, len = o.length; i < len; i++) {
+                    res.push(fn.call(context ? context : o[i], i, o[i]));
+                }
+            } else {
+                // 对象
+                for (var attr in o) {
+                    res.push(fn.call(context ? context : o[attr], attr, o[attr]));
+                }
+            }
+            return res;
+        } else {
+            myj.error("参数o非法");
+        }
+    };
     myj.error = function (eInfo) {
         throw new Error(eInfo);
     };
