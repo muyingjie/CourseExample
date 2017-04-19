@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>表达式编译——布尔常量和null的编译 将中间空格去掉</title>
+    <script src="kernal.js"></script>
+    <script>
+        // 词法分析
+        function getTokens (text){
+            var index = 0;
+            var curCharacter;
+            var tokens = [];
+
+            // 词法分析的主循环，该循环里面调用的readNumber才负责改变循环终止条件
+            while (index < text.length){
+                curCharacter = text.charAt(index);
+                if (isNumber(curCharacter) || curCharacter == '.') {
+                    readNumber();
+                } else if (curCharacter == '\'' || curCharacter == '\"') {
+                    readString();
+                } else if (isIdentifier(curCharacter)) {
+                    // 第一个字符是字母、下划线、美元符时再进一步按照标识符的规则读取
+                    readIdentifier();
+                } else if (isWhitespace(curCharacter)) {
+                    // 遇到空格直接跳过
+                    this.index++;
+                } else {
+                    throw "非法字符：" + curCharacter;
+                }
+            }
+
+            function isNumber(ch){
+                return ch >= '0' && ch <= '9';
+            }
+
+            function isIdentifier(ch){
+                return (ch >= 'a' && ch <= 'z') ||
+                    (ch >= 'A' && ch <= 'Z') ||
+                    (ch === '_') ||
+                    (ch === '$');
+            }
+
+            function isWhitespace(ch){
+                return ch === ' ' || 
+                    ch === '\r' || 
+                    ch === '\t' || 
+                    ch === '\n' || 
+                    ch === '\v';
+            }
+
+            // 可以在这里使用私有函数来避免传入index和text参数，但这本身也增强了该函数与外界的耦合，而且对浏览器解释Js不利
+            function readNumber(){
+                var number = "";
+                while (index < text.length) {
+                    var ch = text.charAt(index);
+                    // 数字类型的两种情况：
+                    // 当前字符是数字类型
+                    // 当前字符是'.'并且后面一个字符是数字类型
+                    if (isNumber(ch) || (ch == '.' && isNumber(getNextCharacter()))) {
+                        number += ch;
+                    } else {
+                        break;
+                    }
+                    index++;
+                }
+
+                // 词法分析的每个token对象要包含它的字面值以及要被编译的值，供生成语法树的时候用
+                tokens.push({
+                    text: number,
+                    value: Number(number)
+                });
+            }
+
+            function readString(){
+                index++;
+                var string = "";
+                while(index < text.length){
+                    var ch = text.charAt(index);
+                    // 如果到了字符串结尾
+                    if (ch == curCharacter) {
+                        index++;
+                        tokens.push({
+                            text: string,
+                            value: string
+                        });
+                        return;
+                    } else {
+                        string += ch;
+                    }
+                    index++;
+                }
+                throw "Unmatched quote";
+            }
+
+            function readIdentifier(){
+                var identiTtext = "";
+                while (index < text.length) {
+                    var ch = text.charAt(index);
+                    if (isIdentifier(ch) || isNumber(ch)) {
+                        identiTtext += ch;
+                    } else {
+                        break;
+                    }
+                    index++;
+                }
+                var token = {
+                    text: identiTtext
+                };
+                tokens.push(token);
+            }
+
+            function getNextCharacter(){
+                return index < text.length - 1 ? text.charAt(index + 1) : false; 
+            }
+
+            return tokens;
+        }
+
+        // =========================
+        // 语法分析
+        // 各种类型的枚举
+        var astType = {
+            Program: "Program",// 整个程序
+            Literal: "Literal"// 常量
+        };
+        var astConstants = {
+            "null": {
+                type: astType.Literal,
+                value: null
+            },
+            "true": {
+                type: astType.Literal,
+                value: true
+            },
+            "false": {
+                type: astType.Literal,
+                value: false
+            }
+        };
+        function getAST (tokens){
+            function getPrimaryNode (){
+                if (astConstants.hasOwnProperty(tokens[0].text)) {
+                    return astConstants[tokens[0].text];
+                } else {
+                    return getConstantNode();
+                }
+            }
+
+            function getConstantNode (){
+                return {
+                    type: astType.Literal,
+                    value: tokens[0].value
+                };
+            }
+
+            return {
+                type: astType.Program,
+                body: getPrimaryNode() // 常量可以看成一种特殊的标识符（identifier）
+            };
+        }
+
+        // =========================
+        // 将AST树变成监听函数，该监听函数接收一个上下文对象作为参数
+        function getExprWatchFn (ast){
+            // 组成最终的监听函数的片段
+            var aWatchFnFragment = [];
+
+            _recurseParseAST(ast);
+            
+            // 递归解析AST树
+            function _recurseParseAST (ast){
+                switch (ast.type){
+                    case astType.Program:
+                        aWatchFnFragment.push(
+                            "return ",
+                            _recurseParseAST(ast.body),
+                            ";"
+                        );
+                        break;
+                    case astType.Literal:
+                        return escape(ast.value);
+                }
+            }
+            // 常量转义
+            // 字符串 abc -> 'abc'
+            //        null -> 'null'
+            function escape(value){
+                if ($.isString(value)) {
+                    return '\'' + value + '\'';
+                } else if ($.isNull(value)) {
+                    return "null";
+                } else {
+                    return value;
+                }
+            }
+            // 将收集的组成的监听函数的片段拼接成函数
+            return new Function(aWatchFnFragment.join(""));
+        }
+
+        // 封装从表达式到返回函数的过程
+        function parse (expr){
+            var tokens = getTokens(expr);
+            var ast = getAST(tokens);
+            // 正式用
+            // return getExprWatchFn(ast);
+            // 测试用
+            return getExprWatchFn(ast).toString();
+        }
+
+        var watchFn1 = parse("true");
+        var watchFn2 = parse("false");
+        var watchFn3 = parse("null");
+        console.log(watchFn1);
+        console.log(watchFn2);
+        console.log(watchFn3);
+
+        // 由于在表达式中转义字符使用的很少，而处理转义字符很复杂，因此不做处理了
+        // $.isString() 使用的是之前封装好的工具函数
+    </script>
+</head>
+<body>
+
+</body>
+</html>
