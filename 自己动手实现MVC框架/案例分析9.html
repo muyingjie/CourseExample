@@ -122,7 +122,7 @@
             // 常量转义
             // 字符串 abc -> 'abc'
             function escape(value){
-                if (myj.isString(value)) {
+                if ($.isString(value)) {
                     return '\'' + value + '\'';
                 } else {
                     return value;
@@ -144,6 +144,9 @@
 
         var watchFn1 = parse("'abc'");
         console.log(watchFn1);
+
+        // 由于在表达式中转义字符使用的很少，而处理转义字符很复杂，因此不做处理了
+        // $.isString() 使用的是之前封装好的工具函数
     </script>
 </head>
 <body>

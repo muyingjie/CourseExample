@@ -1,14 +1,39 @@
 (function (window, undefined) {
     var myj = {};
     myj.each = function (o, fn) {
-        if (myj.isGenericObj(o)) {
-            for(var attr in o){
-                if (!fn.call(o[attr], attr, o[attr])) {
-                    break;
+        // 注意：此处不可以调用isGenericObj方法，因为我们在isGenericObj方法定义前调用了each
+        // each里面如果想要调用isGenericObj的话是调不到的，因为还没定义
+        // if (myj.isGenericObj(o)) {
+        //     for(var attr in o){
+        //         if (!fn.call(o[attr], attr, o[attr])) {
+        //             break;
+        //         }
+        //     }
+        // } else {
+        //     myj.error("each:参数o非法");
+        // }
+
+        if (typeof o == "object") {
+            if (o.length != undefined && o.length > 0) {
+                // 数组
+                for (var i = 0, len = o.length; i < len; i++) {
+                    // 如果写成直接用!一转，没有写返回值的话默认返回return直接就结束循环了
+                    // if (!fn.call(o[i], i, o[i])) {
+                    if (fn.call(o[i], i, o[i]) === false) {
+                        break;
+                    }
+                }
+            } else {
+                // 对象
+                for (var attr in o) {
+                    // if (!fn.call(o[attr], attr, o[attr])) {
+                    if (fn.call(o[attr], attr, o[attr]) === false) {
+                        break;
+                    }
                 }
             }
         } else {
-            myj.error("each:参数o非法");
+            myj.error("参数o非法");
         }
     };
     myj.error = function (eInfo) {
