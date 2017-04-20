@@ -140,8 +140,7 @@
             ArrayExpression: "ArrayExpression",
             ObjectExpression: "ObjectExpression",
             Property: "Property",
-            Identifier: "Identifier",
-            ThisExpression: "ThisExpression"
+            Identifier: "Identifier"
         };
         var astConstants = {
             "null": {
@@ -155,9 +154,6 @@
             "false": {
                 type: astType.Literal,
                 value: false
-            },
-            "this": {
-                type: astType.ThisExpression
             }
         };
         function getAST (tokens){
@@ -318,8 +314,6 @@
                         var intoId = _addFragmentOfGetNextVariableId();
                         _addFragmentOfCreateIf("s", intoId + " = " + _addFragmentOfGetScopeMember("s", ast.name) + ";");
                         return intoId;
-                    case astType.ThisExpression:
-                        return "s";
                 }
             }
             // 常量转义
@@ -371,9 +365,6 @@
         console.log(watchFn1);
 
         console.log(watchFn1({abc: 3}));
-
-        var watchFn2 = parse("this");
-        console.log(watchFn2);
 
         // 由于在表达式中转义字符使用的很少，而处理转义字符很复杂，因此不做处理了
         // $.isString() 使用的是之前封装好的工具函数
