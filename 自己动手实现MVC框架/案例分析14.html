@@ -2,16 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>表达式编译——属性标识符的编译</title>
+    <title>表达式编译——二级属性标识符的编译</title>
     <script src="kernal.js"></script>
     <script>
-        // 之前都是在解析常量，现在开始我们要解析变量
-        // parse("aKey") 返回的函数应该形如
-        // function fn(s) {
-        //     return s.aKey;
-        // }
-        // 这个函数的参数s应该是某个scope的实例化对象
-
+        // 二级属性即aaa.bbb的形式
+        // parse("aKey.bKey")
+        // 在本次解析中我们发现aKey和bKey中间的点在词法解析时出了问题，因为这个点在第一步判断是否是数字是结果为true（我们对于数字判断的算法是只要是数字和点构成的集合即可，目前看来这个算法不完善，我们将其改为解析数字遇到点时点后面必须也得是数字才可以）
 
         // 词法分析
         function getTokens (text){
@@ -22,7 +18,7 @@
             // 词法分析的主循环，该循环里面调用的readNumber才负责改变循环终止条件
             while (index < text.length){
                 curCharacter = text.charAt(index);
-                if (isNumber(curCharacter) || curCharacter == '.') {
+                if (isNumber(curCharacter) || (curCharacter == '.' && isNumber(getNextCharacter()))) {
                     readNumber();
                 } else if (curCharacter == '\'' || curCharacter == '\"') {
                     readString();
@@ -33,7 +29,7 @@
                     // 遇到空格直接跳过
                     index++;
                 } else if (curCharacter == '[' || curCharacter == ']' || curCharacter == ',' ||
-                        curCharacter == '{' || curCharacter == '}' || curCharacter == ':') {
+                        curCharacter == '{' || curCharacter == '}' || curCharacter == ':' || curCharacter == '.') {
                     tokens.push({
                         text: curCharacter
                     });
@@ -140,7 +136,9 @@
             ArrayExpression: "ArrayExpression",
             ObjectExpression: "ObjectExpression",
             Property: "Property",
-            Identifier: "Identifier"
+            Identifier: "Identifier",
+            ThisExpression: "ThisExpression",
+            MemberExpresssion: "MemberExpresssion"
         };
         var astConstants = {
             "null": {
@@ -154,24 +152,39 @@
             "false": {
                 type: astType.Literal,
                 value: false
+            },
+            "this": {
+                type: astType.ThisExpression
             }
         };
         function getAST (tokens){
+            // 在引入多级属性编译之后primaryNode可能是一个多层嵌套的结构，因此我们单独开一个变量
+            // 这个变量将来会存储这个多层嵌套的结构
+            var primaryNode;
             function getPrimaryNode (){
+                // 基础类型节点
                 if (_expectThenShift('[')) {
-                    return getArrayNode();
+                    primaryNode = getArrayNode();
                 } else if (_expectThenShift('{')) {
-                    return getObjectNode();
+                    primaryNode = getObjectNode();
                 } else if (astConstants.hasOwnProperty(tokens[0].text)) {
-                    // return astConstants[tokens[0].text];
-                    // 当getPrimaryNode是在遍历数组各项的时候进来调用的，这里如果依然取tokens的第0项就不合适了
-                    // 应该是逐项取出并出队，这样才可以让tokens后面的项前移到队头解析
-                    return astConstants[_expectThenThrow().text];
+                    primaryNode = astConstants[_expectThenThrow().text];
                 } else if (_getOneFromQueueHead().identifier) {
-                    return getIdentifierNode();
+                    primaryNode = getIdentifierNode();
                 } else {
-                    return getConstantNode();
+                    primaryNode = getConstantNode();
                 }
+
+                // 如果在以上基本类型的节点解析完毕之后发现了'.'，则为复合节点
+                if (_expectThenShift('.')) {
+                    primaryNode = {
+                        type: astType.MemberExpresssion,
+                        object: primaryNode, // 将基础节点作为复合节点的一个属性
+                        property: getIdentifierNode() // 递归查找其他基础节点
+                    };
+                }
+
+                return primaryNode;
             }
 
             function getConstantNode (){
@@ -285,6 +298,8 @@
 
             // 递归解析AST树
             function _recurseParseAST (ast){
+                // 对监听函数中变量的引用
+                var intoId;
                 switch (ast.type){
                     case astType.Program:
                         aWatchFnFragment.push(
@@ -311,8 +326,19 @@
                         });
                         return '{' + properties.join(',') + '}';
                     case astType.Identifier:
-                        var intoId = _addFragmentOfGetNextVariableId();
+                        intoId = _addFragmentOfGetNextVariableId();
                         _addFragmentOfCreateIf("s", intoId + " = " + _addFragmentOfGetScopeMember("s", ast.name) + ";");
+                        return intoId;
+                    case astType.ThisExpression:
+                        return "s";
+                    case astType.MemberExpresssion:
+                        intoId = _addFragmentOfGetNextVariableId();
+                        // 对象部分递归解析
+                        var left = _recurseParseAST(ast.object);
+                        _addFragmentOfCreateIf(
+                                left,
+                                intoId + " = " + _addFragmentOfGetScopeMember(left, ast.property.name)
+                        );
                         return intoId;
                 }
             }
@@ -361,13 +387,11 @@
             // return getExprWatchFn(ast).toString();
         }
 
-        var watchFn1 = parse("abc");
+        var watchFn1 = parse("abc.def");
         console.log(watchFn1);
-
-        console.log(watchFn1({abc: 3}));
-
-        // 由于在表达式中转义字符使用的很少，而处理转义字符很复杂，因此不做处理了
-        // $.isString() 使用的是之前封装好的工具函数
+        console.log(watchFn1({}));
+        console.log(watchFn1({"abc": 1}));
+        console.log(watchFn1({"abc": {"def": 1}}));
     </script>
 </head>
 <body>
