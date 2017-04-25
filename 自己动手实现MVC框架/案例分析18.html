@@ -2,11 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>表达式编译——函数调用</title>
+    <title>表达式编译——方法调用</title>
     <script src="kernal.js"></script>
     <script>
-        // parse("aKey()")
-        // parse("aKey(bKey)") 注意此处bKey又是当前scope上的一个属性
+        // var fn = parse("aKey['bKey']()")
+        // var s = {
+        //     aMember: 42,
+        //     aKey: {
+        //         aMember: 43,
+        //         bKey: function () {
+        //             return this.aMember;
+        //         }
+        //     }
+        // };
+        // fn(s); 43 注意结果不是42，因为bKey方法属于aKey对象而不属于s对象，因此this指的是aKey，故而this.aMember也就是43
+        // 对此我们的处理是给_recurseParseAST方法再传递一个oParentObjInfo参数，该参数初始化为一个空对象，在解析MemberExpression（对象成员属性）的过程中给oParentObjInfo添加一个context属性，该属性将被赋值为当前MemberExpression属于哪个对象，该对象即为将来解析出来的监听函数中的this指向，实际上我们就是通过oParentObjInfo把调用成员方法时的那个对象给带出来了
+        // 需要注意：为了避免变量名冲突，_recurseParseAST的形参和里面CallExpression分支中传给_recurseParseAST的实参不能一样，因此我们在这里吧形参命名为oFormalParentObjInfo
 
         // 词法分析
         function getTokens (text){
@@ -180,8 +191,8 @@
                 // 如果在以上基本类型的节点解析完毕之后发现了'.'，则为复合节点
                 var next;
                 while ((next = _expectThenShift('.')) ||
-                    (next = _expectThenShift('[')) ||
-                    (next = _expectThenShift('('))) {
+                (next = _expectThenShift('[')) ||
+                (next = _expectThenShift('('))) {
                     // computed属性代表是通过[]访问的还是通过.访问的
                     if (next.text == '[') {
                         // 如果要是左中括号[进来的情况，property不一定非得是indentifier
@@ -270,7 +281,7 @@
                     name: _expectThenThrow().text
                 };
             }
-            
+
             function getFunctionArgs() {
                 var args = [];
                 if (!_getOneFromQueueHead(')')) {
@@ -333,7 +344,7 @@
             _recurseParseAST(ast);
 
             // 递归解析AST树
-            function _recurseParseAST (ast){
+            function _recurseParseAST (ast, oFormalParentObjInfo){
                 // 对监听函数中变量的引用
                 var intoId;
                 switch (ast.type){
@@ -364,6 +375,11 @@
                     case astType.Identifier:
                         intoId = _addFragmentOfGetNextVariableId();
                         _addFragmentOfCreateIf("s", intoId + " = " + _addFragmentOfGetScopeMember("s", ast.name) + ";");
+                        if (oFormalParentObjInfo) {
+                            oFormalParentObjInfo.context = "s";
+                            oFormalParentObjInfo.name = ast.name;
+                            oFormalParentObjInfo.computed = false;
+                        }
                         return intoId;
                     case astType.ThisExpression:
                         return "s";
@@ -371,24 +387,46 @@
                         intoId = _addFragmentOfGetNextVariableId();
                         // 对象部分递归解析
                         var left = _recurseParseAST(ast.object);
+                        // 如果是成员函数分支进入的oFormalParentObjInfo形参一定会有定义
+                        if (oFormalParentObjInfo) {
+                            oFormalParentObjInfo.context = left;
+                        }
                         if (ast.computed) {
                             var right = _recurseParseAST(ast.property);
                             _addFragmentOfCreateIf(
                                     left,
                                     intoId + " = " + _addFragmentOfGetScopeMemberComputed(left, right)
                             );
+                            if (oFormalParentObjInfo) {
+                                oFormalParentObjInfo.name = right;
+                                oFormalParentObjInfo.computed = true;
+                            }
                         } else {
                             _addFragmentOfCreateIf(
                                     left,
                                     intoId + " = " + _addFragmentOfGetScopeMember(left, ast.property.name)
                             );
+                            if (oFormalParentObjInfo) {
+                                oFormalParentObjInfo.name = ast.property.name;
+                                oFormalParentObjInfo.computed = false;
+                            }
                         }
                         return intoId;
                     case astType.CallExpression:
-                        var callee = _recurseParseAST(ast.callee);
+                        // 执行环境相关信息对象
+                        var oParentObjInfo = {};
+                        var callee = _recurseParseAST(ast.callee, oParentObjInfo);
                         var args = $.map(ast.arguments, function (i, arg) {
                             return _recurseParseAST(arg);
                         });
+                        // 如果oParentObjInfo对象被操作过，证明目前解析的是方法，否则解析的是函数
+                        if (oParentObjInfo.name) {
+                            if (oParentObjInfo.computed) {
+                                callee = _addFragmentOfGetScopeMemberComputed(oParentObjInfo.context, oParentObjInfo.name);
+                            } else {
+                                callee = _addFragmentOfGetScopeMember(oParentObjInfo.context, oParentObjInfo.name);
+                            }
+                        }
                         return callee + "&&" + callee + "(" + args.join(",") + ")";
                 }
             }
@@ -441,11 +479,41 @@
             // return getExprWatchFn(ast).toString();
         }
 
-        var watchFn1 = parse("abc()");
-        var watchFn2 = parse("abc(def, 1, 'ggg')");
-        console.log(watchFn1);
-        console.log(watchFn1({abc: function(){alert(1);}}));
-        console.log(watchFn2({abc: function(){alert(arguments[1] + arguments[2]);}}));
+        var fn = parse("aKey['bKey']()");
+        console.log(fn);
+        var s = {
+            aMember: 42,
+            aKey: {
+                aMember: 43,
+                bKey: function () {
+                    return this.aMember;
+                }
+            }
+        };
+        console.log(fn(s));
+
+        var fn1 = parse("aKey[bKey]()");
+        console.log(fn1);
+        var s1 = {
+            aMember: 44,
+            aKey: {
+                aMember: 45,
+                cKey: function () {
+                    return this.aMember;
+                }
+            },
+            bKey: "cKey"
+        };
+        console.log(fn1(s1));
+
+        var fn2 = parse("aKey()");
+        console.log(fn2);
+        var s2 = {
+            aKey: function () {
+                return this;
+            }
+        };
+        console.log(fn2(s2));
     </script>
 </head>
 <body>
