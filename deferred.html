@@ -39,12 +39,14 @@
 			};
 
 			function processQueue(state){
-				for(var i = 0; i < state.pending.length; i++){
-					var oWrapped = state.pending[i];
-					var fn = oWrapped.fnSuccess;
-					var def = oWrapped.result;
-					def.resolve(fn(state.value));
-				}
+				if(state.pending){
+					for(var i = 0; i < state.pending.length; i++){
+						var oWrapped = state.pending[i];
+						var fn = oWrapped.fnSuccess;
+						var def = oWrapped.result;
+						def.resolve(fn(state.value));
+					}
+				}				
 			}
 
 			function defer(){
@@ -55,6 +57,25 @@
 				defer: defer
 			};
 		}
+
+		var def = $q().defer();
+		var promise = def.promise;
+		promise.then(function(v){
+			console.log(v);
+			var def = $q().defer();
+			setTimeout(function(){
+				def.resolve(v + 1);
+			}, 1000);
+			return def.promise;
+		}).then(function(v){
+			console.log(v);
+			return 2 * v;
+		}).then(function(v){
+			console.log(v);
+		});
+		setTimeout(function(){
+			def.resolve(20);
+		}, 1000);
 	</script>
 </head>
 <body>
