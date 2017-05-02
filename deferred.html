@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title></title>
+	<script>
+		function $q(){
+			function Promise(){
+				this.$$state = {};
+			}
+			Promise.prototype.then = function(fnSuccess){
+				var result = new Deferred();
+				this.$$state.pending = this.$$state.pending || [];
+				// this.$$state.pending.push(fnSuccess);
+				this.$$state.pending.push({
+					result: result,
+					fnSuccess: fnSuccess
+				});
+				if (this.$$state.status > 0) {
+					fnSuccess(this.$$state.value);
+				}
+				return result.promise;
+			};
+
+			function Deferred(){
+				this.promise = new Promise();
+			}
+			Deferred.prototype.resolve = function(value){
+				if (this.promise.$$state.status) {
+					return;
+				}
+				if (value && Object.prototype.toString.call(value.then) == "[object Function]") {
+					value.then(this.resolve);
+				} else {
+					this.promise.$$state.value = value;
+					this.promise.$$state.status = 1;
+					processQueue(this.promise.$$state);
+				}
+			};
+
+			function processQueue(state){
+				for(var i = 0; i < state.pending.length; i++){
+					var oWrapped = state.pending[i];
+					var fn = oWrapped.fnSuccess;
+					var def = oWrapped.result;
+					def.resolve(fn(state.value));
+				}
+			}
+
+			function defer(){
+				return new Deferred();
+			}
+
+			return {
+				defer: defer
+			};
+		}
+	</script>
+</head>
+<body>
+
+</body>
+</html>
