@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>表达式编译——解析双目运算符</title>
+    <title>表达式编译——解析双目运算符之+和-</title>
     <script src="kernal.js"></script>
     <script>
-        // 解析乘 除 取余
-        // parse("2 * 13 / 4 % 7")
+        // 解析四则运算
+        // parse("20 + 22");
+        // parse("20 + 22 * 9 - 3");
+        // parse("20 + a")({}); 在上下文环境中找不到a时Angular中当做0处理，此处我们暂且当做NaN处理
 
         // 词法分析
         function getTokens (text){
@@ -195,11 +197,25 @@
             // a = -3
             // 等类似的多种表达式
             function getAssignmentNode (){
-                var left = getMultiplicativeNode();
+                var left = getAdditiveNode();
                 if (_expectThenShift("=")) {
                     return {
                         type: astType.AssignmentExpression,
                         left: left,
+                        right: getAdditiveNode()
+                    };
+                }
+                return left;
+            }
+
+            function getAdditiveNode (){
+                var left = getMultiplicativeNode();
+                var token;
+                while(token = (_expectThenShift('+')) || (_expectThenShift('-'))) {
+                    left = {
+                        type: astType.BinaryExpression,
+                        left: left,
+                        operator: token.text,
                         right: getMultiplicativeNode()
                     };
                 }
@@ -522,7 +538,9 @@
                     case astType.UnaryExpression:
                         return ast.operator + '(' + _recurseParseAST(ast.argument) + ')';
                     case astType.BinaryExpression:
-                        return "(" + _recurseParseAST(ast.left) + ")" + ast.operator + "(" + _recurseParseAST(ast.right) + ")";
+                            return "(" + _recurseParseAST(ast.left) + ")" +
+                                    ast.operator +
+                                    "(" + _recurseParseAST(ast.right) + ")";
 
                 }
             }
@@ -575,9 +593,18 @@
             // return getExprWatchFn(ast).toString();
         }
 
-        var fn = parse("2 * 13 / 4 % 7");
+        var fn = parse("20 + 22");
+        var fn1 = parse("20 + 22 * 9 - 3");
+        var fn2 = parse("20 + a");
+        var fn3 = parse("2 * 13 / 4 % 7");
         console.log(fn);
+        console.log(fn1);
+        console.log(fn2);
+        console.log(fn3);
         console.log(fn());
+        console.log(fn1());
+        console.log(fn2({a: 3}));
+        console.log(fn3());
     </script>
 </head>
 <body>
