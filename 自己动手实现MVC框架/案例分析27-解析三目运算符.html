@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>表达式编译——解析逻辑运算符</title>
+    <title>表达式编译——解析三目运算符</title>
     <script src="kernal.js"></script>
     <script>
-        // 解析逻辑运算符 || &&
-        // 首先还是需要在OPERATORS中增加||和&&作为key
-        // 接下来在语法分析阶段需要根据运算符优先级在AST的特定位置插入节点
-        // 由于逻辑运算符的优先级小于关系运算符，因此需要在逻辑运算符节点生成函数中包含关系运算符节点生成函数的调用
-        // ||的优先级比&&要低，因此要开两个方法分别用于生成||节点和&&节点，而且生成||节点函数内部要调用生成&&节点的函数
+        // 解析三目运算符
+        // 词法分析阶段，三目运算符需要在[]{},:.()分支中判断而非最后的OPERATORS中判断
+        // 在该分支中我们要加入对?的扫描，:我们之前已经添加了
+        // 在AST生成阶段我们会构建一种新的AST节点，包含组成三目表达式中的三个部分：test consequent alternate
+        // 我们会先调用getLogicalOrNode扫描test部分，接下来应该期望遇到?，让?从tokens队列出队之后，再通过getAssignmentNode去解析接下来从栈中弹出的token，这样就可以将?当中递归调用三目的情况考虑进去，接下来应该期待遇到:，让:从tokens队列出队之后，也应该通过getAssignmentNode去解析接下来从栈中弹出的token，这样就和解析?后面的表达式递归处理一样也将此时遇到的表达式递归解析
 
         // 词法分析
         function getTokens (text){
@@ -32,7 +32,8 @@
                     index++;
                 } else if (curCharacter == '[' || curCharacter == ']' || curCharacter == ',' ||
                         curCharacter == '{' || curCharacter == '}' || curCharacter == ':' ||
-                        curCharacter == '.' || curCharacter == '(' || curCharacter == ')') {
+                        curCharacter == '.' || curCharacter == '(' || curCharacter == ')' ||
+                        curCharacter == '?') {
                     // 这个条件现在已经有些啰嗦了，因此Angular内部将其封装了一个函数，这里为了清楚的表达意思，暂时先不往出提取了
                     tokens.push({
                         text: curCharacter
@@ -168,7 +169,8 @@
             AssignmentExpression: "AssignmentExpression",
             UnaryExpression: "UnaryExpression",
             BinaryExpression: "BinaryExpression",
-            LogicalExpression: "LogicalExpression"
+            LogicalExpression: "LogicalExpression",
+            ConditionalExpression: "ConditionalExpression"
         };
         var astConstants = {
             "null": {
@@ -219,15 +221,32 @@
             // a = -3
             // 等类似的多种表达式
             function getAssignmentNode (){
-                var left = getLogicalOrNode();
+                var left = getTernaryNode();
                 if (_expectThenShift("=")) {
                     return {
                         type: astType.AssignmentExpression,
                         left: left,
-                        right: getLogicalOrNode()
+                        right: getTernaryNode()
                     };
                 }
                 return left;
+            }
+
+            function getTernaryNode (){
+                var test = getLogicalOrNode();
+                if (_expectThenShift("?")) {
+                    var consequent = getAssignmentNode();
+                    if (_expectThenShift(":")) {
+                        var alternate = getAssignmentNode();
+                        return {
+                            type: astType.ConditionalExpression,
+                            test: test,
+                            consequent: consequent,
+                            alternate: alternate
+                        };
+                    }
+                }
+                return test;
             }
 
             function getLogicalOrNode (){
@@ -620,7 +639,14 @@
                         return "(" + _recurseParseAST(ast.left) + ")" +
                                 ast.operator +
                                 "(" + _recurseParseAST(ast.right) + ")";
-
+                    case astType.ConditionalExpression:
+                        intoId = _addFragmentOfGetNextVariableId();
+                        // testId变量用于存储条件值
+                        var testId = _addFragmentOfGetNextVariableId();
+                        aWatchFnFragment.push(testId + "=" + _recurseParseAST(ast.test) + ";");
+                        _addFragmentOfCreateIf(testId, intoId + "=" + _recurseParseAST(ast.consequent) + ";");
+                        _addFragmentOfCreateIf("!" + testId, intoId + "=" + _recurseParseAST(ast.alternate) + ";");
+                        return intoId;
                 }
             }
             // 常量转义
@@ -672,18 +698,15 @@
             // return getExprWatchFn(ast).toString();
         }
 
-        var fn = parse("20 || 22");
-        var fn1 = parse("20 && 3");
-        var fn2 = parse("true || false");
-        var fn3 = parse("false && true");
+        var fn = parse("true ? 2 : 3");
+        var fn1 = parse("true ? true ? 1 : 4 : false");
+        var fn2 = parse("false ? 7 : true ? 1 : 4 false");
         console.log(fn);
         console.log(fn1);
         console.log(fn2);
-        console.log(fn3);
         console.log(fn());
         console.log(fn1());
-        console.log(fn2({a: 3}));
-        console.log(fn3());
+        console.log(fn2());
     </script>
 </head>
 <body>
