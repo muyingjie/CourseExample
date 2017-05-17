@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>表达式编译——解析双目运算符</title>
+    <script src="kernal.js"></script>
+    <script>
+        // 解析乘 除 取余
+        // parse("2 * 13 / 4 % 7")
+
+        // 词法分析
+        function getTokens (text){
+            var index = 0;
+            var curCharacter;
+            var tokens = [];
+
+            // 词法分析的主循环，该循环里面调用的readNumber才负责改变循环终止条件
+            while (index < text.length){
+                curCharacter = text.charAt(index);
+                if (isNumber(curCharacter) || (curCharacter == '.' && isNumber(getNextCharacter()))) {
+                    readNumber();
+                } else if (curCharacter == '\'' || curCharacter == '\"') {
+                    readString();
+                } else if (isIdentifier(curCharacter)) {
+                    // 第一个字符是字母、下划线、美元符时再进一步按照标识符的规则读取
+                    readIdentifier();
+                } else if (isWhitespace(curCharacter)) {
+                    // 遇到空格直接跳过
+                    index++;
+                } else if (curCharacter == '[' || curCharacter == ']' || curCharacter == ',' ||
+                        curCharacter == '{' || curCharacter == '}' || curCharacter == ':' ||
+                        curCharacter == '.' || curCharacter == '(' || curCharacter == ')' ||
+                        curCharacter == '=') {
+                    // 这个条件现在已经有些啰嗦了，因此Angular内部将其封装了一个函数，这里为了清楚的表达意思，暂时先不往出提取了
+                    tokens.push({
+                        text: curCharacter
+                    });
+                    index++;
+                } else {
+                    // 处理操作符
+                    var op = OPERATORS[curCharacter];
+                    if (op) {
+                        tokens.push({
+                            text: curCharacter
+                        });
+                        index++;
+                    } else {
+                        throw "非法字符：" + curCharacter;
+                    }
+                }
+            }
+
+            function isNumber(ch){
+                return ch >= '0' && ch <= '9';
+            }
+
+            function isIdentifier(ch){
+                return (ch >= 'a' && ch <= 'z') ||
+                        (ch >= 'A' && ch <= 'Z') ||
+                        (ch === '_') ||
+                        (ch === '$');
+            }
+
+            function isWhitespace(ch){
+                return ch === ' ' ||
+                        ch === '\r' ||
+                        ch === '\t' ||
+                        ch === '\n' ||
+                        ch === '\v';
+            }
+
+            // 可以在这里使用私有函数来避免传入index和text参数，但这本身也增强了该函数与外界的耦合，而且对浏览器解释Js不利
+            function readNumber(){
+                var number = "";
+                while (index < text.length) {
+                    var ch = text.charAt(index);
+                    // 数字类型的两种情况：
+                    // 当前字符是数字类型
+                    // 当前字符是'.'并且后面一个字符是数字类型
+                    if (isNumber(ch) || (ch == '.' && isNumber(getNextCharacter()))) {
+                        number += ch;
+                    } else {
+                        break;
+                    }
+                    index++;
+                }
+
+                // 词法分析的每个token对象要包含它的字面值以及要被编译的值，供生成语法树的时候用
+                tokens.push({
+                    text: number,
+                    value: Number(number)
+                });
+            }
+
+            function readString(){
+                index++;
+                var string = "";
+                var rawString = curCharacter;
+                while(index < text.length){
+                    var ch = text.charAt(index);
+                    // 如果到了字符串结尾
+                    rawString += curCharacter;
+                    if (ch == curCharacter) {
+                        index++;
+                        tokens.push({
+                            text: rawString,
+                            value: string
+                        });
+                        return;
+                    } else {
+                        string += ch;
+                    }
+                    index++;
+                }
+                throw "Unmatched quote";
+            }
+
+            function readIdentifier(){
+                var identiTtext = "";
+                while (index < text.length) {
+                    var ch = text.charAt(index);
+                    if (isIdentifier(ch) || isNumber(ch)) {
+                        identiTtext += ch;
+                    } else {
+                        break;
+                    }
+                    index++;
+                }
+                var token = {
+                    text: identiTtext,
+                    identifier: true
+                };
+                tokens.push(token);
+            }
+
+            function getNextCharacter(){
+                return index < text.length - 1 ? text.charAt(index + 1) : false;
+            }
+
+            return tokens;
+        }
+
+        // =========================
+        // 语法分析
+        // 各种类型的枚举
+        var astType = {
+            Program: "Program",// 整个程序
+            Literal: "Literal",// 常量
+            ArrayExpression: "ArrayExpression",
+            ObjectExpression: "ObjectExpression",
+            Property: "Property",
+            Identifier: "Identifier",
+            ThisExpression: "ThisExpression",
+            MemberExpresssion: "MemberExpresssion",
+            CallExpression: "CallExpression",
+            AssignmentExpression: "AssignmentExpression",
+            UnaryExpression: "UnaryExpression",
+            BinaryExpression: "BinaryExpression"
+        };
+        var astConstants = {
+            "null": {
+                type: astType.Literal,
+                value: null
+            },
+            "true": {
+                type: astType.Literal,
+                value: true
+            },
+            "false": {
+                type: astType.Literal,
+                value: false
+            },
+            "this": {
+                type: astType.ThisExpression
+            }
+        };
+        var OPERATORS = {
+            "+": true,
+            "!": true,
+            "-": true,
+            "*": true,
+            "/": true,
+            "%": true
+        };
+        function getAST (tokens){
+            // 在引入多级属性编译之后primaryNode可能是一个多层嵌套的结构，因此我们单独开一个变量
+            // 这个变量将来会存储这个多层嵌套的结构
+            var primaryNode;
+
+            // 对于赋值表达式，可以理解为由运算符节点构成（在这一版本中自然是单目运算符节点）
+
+            // left和right都需要替换成UnaryNode，因为我们有可能解析
+            // +1
+            // -2
+            // a = -3
+            // 等类似的多种表达式
+            function getAssignmentNode (){
+                var left = getMultiplicativeNode();
+                if (_expectThenShift("=")) {
+                    return {
+                        type: astType.AssignmentExpression,
+                        left: left,
+                        right: getMultiplicativeNode()
+                    };
+                }
+                return left;
+            }
+
+            // 获取双目运算符节点，我们可以理解为双目运算符节点由单目运算符节点构成
+            function getMultiplicativeNode (){
+                var left = getUnaryNode();
+                var token;
+                while (token = (_expectThenShift('*')) || _expectThenShift('/') || _expectThenShift('%')) {
+                    left =  {
+                        type: astType.BinaryExpression,
+                        left: left,
+                        operator: token.text,
+                        right: getUnaryNode()
+                    };
+                }
+                return left;
+            }
+
+            // 获取单目运算符节点，对于单目运算符节点，我们可以认为由运算符和primaryNode构成
+            function getUnaryNode (){
+                var token;
+                if (token = (_expectThenShift('+') || _expectThenShift('!') || _expectThenShift('-'))) {
+                    return {
+                        type: astType.UnaryExpression,
+                        operator: token.text,
+                        argument: getUnaryNode()
+                    };
+                } else {
+                    return getPrimaryNode();
+                }
+            }
+
+            function getPrimaryNode (){
+                // 基础类型节点
+                if (_expectThenShift('[')) {
+                    primaryNode = getArrayNode();
+                } else if (_expectThenShift('{')) {
+                    primaryNode = getObjectNode();
+                } else if (astConstants.hasOwnProperty(tokens[0].text)) {
+                    primaryNode = astConstants[_expectThenThrow().text];
+                } else if (_getOneFromQueueHead().identifier) {
+                    primaryNode = getIdentifierNode();
+                } else {
+                    primaryNode = getConstantNode();
+                }
+
+                // 如果在以上基本类型的节点解析完毕之后发现了'.'，则为复合节点
+                var next;
+                while ((next = _expectThenShift('.')) ||
+                (next = _expectThenShift('[')) ||
+                (next = _expectThenShift('('))) {
+                    // computed属性代表是通过[]访问的还是通过.访问的
+                    if (next.text == '[') {
+                        // 如果要是左中括号[进来的情况，property不一定非得是indentifier
+                        primaryNode = {
+                            type: astType.MemberExpresssion,
+                            object: primaryNode,
+                            property: getPrimaryNode(),
+                            computed: true
+                        };
+                        // 如果要是左中括号[进来的情况，必须以右中括号]结尾
+                        _expectThenThrow(']');
+                    } else if (next.text == '.') {
+                        primaryNode = {
+                            type: astType.MemberExpresssion,
+                            object: primaryNode, // 将基础节点作为复合节点的一个属性
+                            property: getIdentifierNode(), // 递归查找其他基础节点
+                            computed: false
+                        };
+                    } else if (next.text == '(') {
+                        primaryNode = {
+                            type: astType.CallExpression,
+                            callee: primaryNode,
+                            arguments: getFunctionArgs()
+                        };
+                        _expectThenThrow(')');
+                    }
+                }
+
+                return primaryNode;
+            }
+
+            function getConstantNode (){
+                return {
+                    type: astType.Literal,
+                    // value: tokens[0].value
+                    // 原因和上面生成标识符节点的函数（getPrimaryNode）一样
+                    value: _expectThenThrow().value
+                };
+            }
+
+            function getArrayNode (){
+                var elements = [];
+                if (!_getOneFromQueueHead(']')) {
+                    do {
+                        elements.push(getAssignmentNode());
+                    } while(_expectThenShift(','));
+                }
+                _expectThenThrow(']');
+                return {
+                    type: astType.ArrayExpression,
+                    elements: elements
+                };
+            }
+
+            function getObjectNode() {
+                var properties = [];
+                if (!_getOneFromQueueHead('}')) {
+                    do {
+                        // 解析属性
+                        var property = {
+                            type: astType.Property
+                        };
+                        // 属性部分可以是常量、标识符
+                        if (_getOneFromQueueHead().identifier) {
+                            property.key = getIdentifierNode();
+                        } else {
+                            property.key = getConstantNode();
+                        }
+                        // 解析中间的冒号
+                        _expectThenThrow(':');
+                        // 解析属性值
+                        property.value = getAssignmentNode();
+                        properties.push(property);
+                    } while(_expectThenShift(','));
+                }
+                _expectThenThrow('}');
+                return {
+                    type: astType.ObjectExpression,
+                    properties: properties
+                };
+            }
+
+            function getIdentifierNode (){
+                return {
+                    type: astType.Identifier,
+                    name: _expectThenThrow().text
+                };
+            }
+
+            function getFunctionArgs() {
+                var args = [];
+                if (!_getOneFromQueueHead(')')) {
+                    do {
+                        args.push(getAssignmentNode());
+                    } while(_expectThenShift(','));
+                }
+                return args;
+            }
+
+            // 从tokens队头取出一项看是不是期望值e，如果是的话出队
+            // expect
+            function _expectThenShift (e){
+                // if (tokens.length > 0) {
+                //     if (tokens[0].text === e || !e) {
+                //         return tokens.shift();
+                //     }
+                // }
+                var token = _getOneFromQueueHead(e);
+                if (token) {
+                    return tokens.shift();
+                }
+            }
+
+            // 从tokens队头取出一项看是不是期望值e，如果是的话出队
+            // consume
+            function _expectThenThrow (e){
+                var token = _expectThenShift(e);
+                if (!token) {
+                    throw "不希望的字符：" + e;
+                }
+                return token;
+            }
+
+            // 返回队列最顶头一项，不传参时仅仅是返回一项而不做比较
+            // peek
+            function _getOneFromQueueHead (e){
+                if (tokens.length > 0) {
+                    var text = tokens[0].text;
+                    if ((text === e) || !e) {
+                        return tokens[0];
+                    }
+                }
+            }
+
+            return {
+                type: astType.Program,
+                body: getAssignmentNode() // 常量可以看成一种特殊的标识符（identifier）
+            };
+        }
+
+        // =========================
+        // 将AST树变成监听函数，该监听函数接收一个上下文对象作为参数
+        function getExprWatchFn (ast){
+            // 组成最终的监听函数的片段
+            var aWatchFnFragment = [];
+            var nextVariableId = 0;
+            var aVariable = [];
+
+            _recurseParseAST(ast);
+
+            // 递归解析AST树
+            // 参数isCreate代表在解析aaa.bbb.ccc.ddd这种很多及的属性时，如果某属性不存在就新建
+            function _recurseParseAST (ast, oFormalParentObjInfo, isCreate){
+                // 对监听函数中变量的引用
+                var intoId;
+                switch (ast.type){
+                    case astType.Program:
+                        aWatchFnFragment.push(
+                                "return ",
+                                _recurseParseAST(ast.body),
+                                ";"
+                        );
+                        break;
+                    case astType.Literal:
+                        return escape(ast.value);
+                    case astType.ArrayExpression:
+                        var ret = $.map(ast.elements, function (i, o){
+                            return _recurseParseAST(o);
+                        });
+                        return '[' + ret.join(',') + ']';
+                    case astType.ObjectExpression:
+                        var properties = $.map(ast.properties, function (i, property) {
+                            // 对key是identifier和常量的各自处理
+                            var key = property.key.type === astType.Identifier ?
+                                    property.key.name :
+                                    escape(property.key.value);
+                            var value = _recurseParseAST(property.value);
+                            return key + ':' + value;
+                        });
+                        return '{' + properties.join(',') + '}';
+                    case astType.Identifier:
+                        intoId = _addFragmentOfGetNextVariableId();
+                        if (isCreate) {
+                            _addFragmentOfCreateIf(
+                                    _addFragmentOfGetScopeMember("s", ast.name) + " == undefined",
+                                    _addFragmentOfGetScopeMember("s", ast.name) + " = {};"
+                            );
+                        }
+                        _addFragmentOfCreateIf("s", intoId + " = " + _addFragmentOfGetScopeMember("s", ast.name) + ";");
+                        if (oFormalParentObjInfo) {
+                            oFormalParentObjInfo.context = "s";
+                            oFormalParentObjInfo.name = ast.name;
+                            oFormalParentObjInfo.computed = false;
+                        }
+                        return intoId;
+                    case astType.ThisExpression:
+                        return "s";
+                    case astType.MemberExpresssion:
+                        intoId = _addFragmentOfGetNextVariableId();
+                        // 对象部分递归解析
+                        var left = _recurseParseAST(ast.object, undefined, isCreate);
+                        // 如果是成员函数分支进入的oFormalParentObjInfo形参一定会有定义
+                        if (oFormalParentObjInfo) {
+                            oFormalParentObjInfo.context = left;
+                        }
+                        if (ast.computed) {
+                            var right = _recurseParseAST(ast.property);
+                            if (isCreate) {
+                                _addFragmentOfCreateIf(
+                                        _addFragmentOfGetScopeMemberComputed(left, right) + " == undefined",
+                                        _addFragmentOfGetScopeMemberComputed(left, right) + " = {};"
+                                );
+                            }
+                            _addFragmentOfCreateIf(
+                                    left,
+                                    intoId + " = " + _addFragmentOfGetScopeMemberComputed(left, right)
+                            );
+                            if (oFormalParentObjInfo) {
+                                oFormalParentObjInfo.name = right;
+                                oFormalParentObjInfo.computed = true;
+                            }
+                        } else {
+                            if (isCreate) {
+                                _addFragmentOfCreateIf(
+                                        _addFragmentOfGetScopeMember(left, ast.property.name) + " == undefined",
+                                        _addFragmentOfGetScopeMember(left, ast.property.name) + " = {};"
+                                );
+                            }
+                            _addFragmentOfCreateIf(
+                                    left,
+                                    intoId + " = " + _addFragmentOfGetScopeMember(left, ast.property.name)
+                            );
+                            if (oFormalParentObjInfo) {
+                                oFormalParentObjInfo.name = ast.property.name;
+                                oFormalParentObjInfo.computed = false;
+                            }
+                        }
+                        return intoId;
+                    case astType.CallExpression:
+                        // 执行环境相关信息对象
+                        var oParentObjInfo = {};
+                        var callee = _recurseParseAST(ast.callee, oParentObjInfo);
+                        var args = $.map(ast.arguments, function (i, arg) {
+                            return _recurseParseAST(arg);
+                        });
+                        // 如果oParentObjInfo对象被操作过，证明目前解析的是方法，否则解析的是函数
+                        if (oParentObjInfo.name) {
+                            if (oParentObjInfo.computed) {
+                                callee = _addFragmentOfGetScopeMemberComputed(oParentObjInfo.context, oParentObjInfo.name);
+                            } else {
+                                callee = _addFragmentOfGetScopeMember(oParentObjInfo.context, oParentObjInfo.name);
+                            }
+                        }
+                        return callee + "&&" + callee + "(" + args.join(",") + ")";
+                    case astType.AssignmentExpression:
+                        var leftContext = {};
+                        // 第三个参数true代表解析每一级属性时如果没有的话直接创建
+                        _recurseParseAST(ast.left, leftContext, true);
+                        var leftExpr;
+                        if (leftContext.computed) {
+                            leftExpr = _addFragmentOfGetScopeMemberComputed(leftContext.context, leftContext.name);
+                        } else {
+                            leftExpr = _addFragmentOfGetScopeMember(leftContext.context, leftContext.name);
+                        }
+                        return leftExpr + "=" + _recurseParseAST(ast.right);
+                    case astType.UnaryExpression:
+                        return ast.operator + '(' + _recurseParseAST(ast.argument) + ')';
+                    case astType.BinaryExpression:
+                        return "(" + _recurseParseAST(ast.left) + ")" + ast.operator + "(" + _recurseParseAST(ast.right) + ")";
+
+                }
+            }
+            // 常量转义
+            // 字符串 abc -> 'abc'
+            //        null -> 'null'
+            function escape(value){
+                if ($.isString(value)) {
+                    return '\'' + value + '\'';
+                } else if ($.isNull(value)) {
+                    return "null";
+                } else {
+                    return value;
+                }
+            }
+
+            // 添加取属性的函数体片段
+            function _addFragmentOfGetScopeMember(left, right) {
+                return '(' + left + ')' + '.' + right;
+            }
+
+            function _addFragmentOfGetScopeMemberComputed(left, right) {
+                return '(' + left + ')' + '[' + right + ']';
+            }
+
+            // 添加if判断的函数体片段
+            function _addFragmentOfCreateIf(test, consequent) {
+                aWatchFnFragment.push("if(", test, "){", consequent, "}");
+            }
+
+            // 添加生成变量的函数体判断
+            function _addFragmentOfGetNextVariableId() {
+                var id = "v" + (nextVariableId++);
+                aVariable.push(id);
+                return id;
+            }
+
+            // 将收集的组成的监听函数的片段拼接成函数
+            var fnBody = (aVariable.length > 0 ? "var " + aVariable.join(",") + ";" : "") + aWatchFnFragment.join("");
+            return new Function("s", fnBody);
+        }
+
+        // 封装从表达式到返回函数的过程
+        function parse (expr){
+            var tokens = getTokens(expr);
+            var ast = getAST(tokens);
+            // 正式用
+            return getExprWatchFn(ast);
+            // 测试用
+            // return getExprWatchFn(ast).toString();
+        }
+
+        var fn = parse("2 * 13 / 4 % 7");
+        console.log(fn);
+        console.log(fn());
+    </script>
+</head>
+<body>
+
+</body>
+</html>
