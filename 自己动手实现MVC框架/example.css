@@ -1,0 +1,10 @@
+*{ margin: 0; padding: 0; list-style: none; text-decoration: none; color: #222; box-sizing: content-box; vertical-align: middle;}
+.list-wrap{ margin: 50px; padding: 30px; border: 1px solid #ccc; }
+.list-wrap .total-txt{ display: inline-block; }
+.list-wrap .total-txt.red{ color: red; }
+.list-wrap .list{ margin-top: 30px; width: 500px; }
+.list-wrap .list .item{ line-height: 30px; border-bottom: 1px dashed #000; }
+.list-wrap .list .item .content,.list-wrap .list .item .del{ display: inline-block; }
+.list-wrap .list .item .del{ color: red; }
+.list-wrap .comment-wrap{ margin-top: 30px; }
+.list-wrap input{ height: 20px; }

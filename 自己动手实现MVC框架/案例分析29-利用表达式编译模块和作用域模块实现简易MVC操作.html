@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>利用表达式编译模块和作用域模块实现简易MVC操作</title>
+    <link rel="stylesheet" href="example.css">
+    <script src="kernal.js"></script>
+    <script src="parse.js"></script>
+</head>
+<body>
+<div class="list-wrap">
+    <div class="total-txt">共</div>
+    <div class="total-txt red num" m-bind="comments.length"></div>
+    <div class="total-txt">条评价</div>
+
+    <ul class="list">
+        <li class="item" m-repeat="item in comments">
+            <div class="content" m-bind="item"></div>
+            <a href="javascript:;" class="del">删除</a>
+        </li>
+    </ul>
+
+    <div class="comment-wrap">
+        <input type="text" class="comment" />
+        <input type="button" value="发表评价" class="publish-comment">
+    </div>
+</div>
+</body>
+<script>
+    // 通过前面的努力，我们基本上实现了表达式编译模块和作用域模块
+    // 接下来我们在这两个模块的基础上继续以我们最初的案例为例引入一个核心模块：DOM编译
+    // 所谓DOM编译就是从根节点开始依次遍历DOM树，寻找自定义的html标签和属性
+    // 这些标签或属性通常都代表了某种功能，这些功能又分为两大类
+    // 首先，m-bind m-repeat是渲染类型的指令，也就是负责从作用域对象上找到对应的值在DOM中做选染
+    // 而m-click这类指令是交互类型的指令，也就是当用户触发点击事件时需要将该点击事件造成的一系列数据上的改变反应到DOM中
+    // 比如m-bind会将其属性值取出并去对应作用域对象上寻找对应的值
+    // 含有m-repeat的属性指令会根据其属性值去对应作用域上找到相关的集合并循环创建DOM列表
+    // 我们现在可以大致思考一下接下来的处理流程：从根节点（在这里就是.list-wrap元素）开始递归遍历各个子节点找到自定义的指令
+    // 找到这些指令之后该怎么办呢？因为每一种指令都对应一种功能，因此我们肯定需要以函数的方式先提供这种功能
+    // 当遍历到这些指令之后再执行这个指令对应的函数，也就是执行对应的功能
+    // 由此也可以基本上想出来我们接下来的代码大概分功能集合和DOM遍历渲染两部分
+
+    // 功能集合
+    var directives = {
+        // 首先实现第一个指令对应的功能m-bind
+        // 我们来思考一下，这个指令主要干什么，其实很简单，就是把传给该指令的值通过表达式编译添加到对应的scope上去
+        // 并且响应函数中还要在DOM元素上设置值
+        // 注意，此处我们用到了四部分东西：该指令对应的值、表达式编译、对应scope、DOM元素
+        // 这些东西从哪里来呢？表达式编译之前我们已经封装好了，指令对应的值、对应的scope、DOM元素肯定是在DOM遍历渲染的过程中才确定的
+        // 因此很自然的想到了在遍历渲染的过程中通过传递参数来实现，因此在这里也可以接收到
+        "m-bind": function(oEle, val, scope) {
+            scope[val]
+        }
+    };
+
+</script>
+</html>
