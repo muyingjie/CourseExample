@@ -10,6 +10,7 @@
 		ol,ul,dl{ list-style: none;}
 		table{ border-collapse: collapse; border-spacing:0; }
 		input,textarea{ outline: none; }
+		img{ vertical-align: top;}
 
 		/*全局公共样式*/
 		.fl{ float: left; }
@@ -46,7 +47,21 @@
 
 		.content{ }
 		.content .left{ width: 540px;}
+		/*有3个地方用到了左边一个标题，右边是more这个结构了，仅仅是宽度不同，所以宽度交给父级，让子级继承父级的宽度，其余样式公用*/
+		/*================公用部分开始==================*/
+		.content .title{ margin-top: 20px; padding-bottom: 10px; border-bottom: 1px solid #900; margin-bottom: 20px;}
+		.content .title .logo{ width: 200px; height: 40px; background: #eef; text-align: center; line-height: 40px;}
+		.content .title .more{ margin-top: 20px;}
+		/*================公用部分结束==================*/
+		.content .left .spec-content{}
+		.content .left .spec-content .img{ margin: 0 10px 10px 0;}
 		.content .right{ width: 400px;}
+
+		.content .main{ width: 100%;}
+		.content .main .course .item{ position: relative; width: 120px; height: 66px; margin-right: 40px; margin-bottom: 10px;}
+		.content .main .course .item .link{ display: block;}
+		.content .main .course .item .bottom-prompt{ position: absolute; bottom: 0; width: 100%; height: 24px; line-height: 24px; font-size: 12px; padding-left: 8px; box-sizing: border-box; background: #000; color: #fff; display: none;}
+		.content .main .course .item:hover .bottom-prompt{ display: block;}
 	</style>
 	<script src="jquery-1.12.4.js"></script>
 	<script>
@@ -136,8 +151,116 @@
 
 	<!--大图下面内容部分-->
 	<div class="content w960 clear">
-		<div class="left fl"></div>
-		<div class="right fr"></div>
+		<div class="left fl">
+			<div class="title clear">
+				<div class="logo fl">公司简介</div>
+				<div class="more fr">more&gt;&gt;</div>
+			</div>
+			<div class="spec-content clear">
+				<img src="table3.jpg" alt="" class="img fl" />
+				<div class="txt">图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。图片文字环绕效果，目前很少有这样设计图。</div>
+			</div>
+		</div>
+		<div class="right fr">
+			<div class="title clear">
+				<div class="logo fl">公司简介</div>
+				<div class="more fr">more&gt;&gt;</div>
+			</div>
+		</div>
+	</div>
+	<div class="content w960 clear">
+		<div class="main">
+			<div class="title clear">
+				<div class="logo fl">公司简介</div>
+				<div class="more fr">more&gt;&gt;</div>
+			</div>
+			<ul class="course clear">
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+				<li class="item fl">
+					<a href="javascript:;" class="link">
+						<img src="table5.jpg" alt="">
+					</a>
+					<!--移入显示下面这一条会用定位-->
+					<div class="bottom-prompt">课程课程课程</div>
+				</li>
+			</ul>
+		</div>
 	</div>
 </body>
 </html>
