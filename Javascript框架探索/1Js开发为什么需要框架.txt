@@ -37,7 +37,42 @@
 这样的实现简单易读，但问题也比较严重
 假如还没输入或还没输完整想要搜索的内容不小心点了一下搜索按钮，那么接下来将是漫长的等待，然后resList页面中出现一行文字：您输入的结果不能为空，在当时绝大多数用户使用的是速度仅为28.8kbit/s的猫上网，因此每次在客户端进行一次操作希望得到服务器中的某些数据时都是对耐心的一次考验。在诸如登录和注册的过程中对用户输入有某些特殊要求（例如用户名至少5位，且不能有特殊符号）时这种矛盾体现的更为明显。
 
-于是JavaScript便诞生了，是的，JavaScript最初设计之初就是为了解决这样的客户端验证的问题的
+于是JavaScript便诞生了，是的，JavaScript最初设计之初就是为了解决这样的客户端验证的问题的，这样一来服务器的压力有所降低，作为一门语言，肯定有一些基本的语法，例如变量定义，数据类型，表达式和语句格式，作用域等等，最初这些都是由网景公司自己实现的，后来网景把这些语法规定提交给ECMA International，以便让之后的浏览器制造商遵循该标准，该标准就是ECMAScript的第一个版本。
+
+当然我们知道后来网景被IE打败，IE自己造了一套标准，因此出现了现在这么多的IE兼容问题。
+
+关于ECMA的设计思路有一点非常值得一提：一切皆对象，它规定实现ECMA标准的语言是基于对象的，对象通过构造函数构造出来。同时它也规定了实现ECMA标准的语言必须实现一些最基础的构造函数：Object Function Array String Boolean Number Date，构造函数里面描述对象的各个组成部分（属性和方法），那么我们怎么在脚本中得到一个对象呢？大概有以下两种方法：
+1、通过new后面跟构造函数创建对象
+2、简化定义方式
+举例说明：
+var arr = [1, 2, 3]; //这句话和var arr = new Array(1, 2, 3);等价
+var obj = {a: 1}; //这句话和var obj = new Object(); obj.a = 1;等价
+function fn(){ var a = 3; } //这个函数定义和var fn = new Function("var a = 3;");
+var str = "aaa"; //对于基本类型，在程序运行过程中如果调用到了其方法，例如aaa.indexOf("a");会先构建一个new String("aaa")实例化对象，使用完毕之后立即销毁，本质上还是对象
+
+如果想要得到Date的实例化对象，ECMA并没规定实现它的语言必须给我们提供类似上面这种“简化定义方式”，因此只能通过new Date()来创建
+
+ECMA同时也规定实现它的语言必须提供一些对象：Math对象、全局对象，事实上通常构造Math对象和全局对象的函数是Object。
+
+由于同类对象的方法都是一样的（例如[1, 2]和[2, 3]两个数组都有push pop等方法），因此为了避免空间浪费，同类对象的方法都共享在一个公共的对象上，这个对象就是原型对象
+
+原型对象该如何访问到呢？有两种方法：
+1、访问实例化对象的__proto__属性
+2、访问构造函数的prototype属性（因为所有同类对象都是由同一个构造函数构造出来的，存储所有这些对象的方法的公共对象必然和构造函数有一定关系）
+
+原型对象也是对象，既然是对象，就也应该有__proto__属性，该属性指向原型对象的原型对象，那原型对象的原型对象是一个什么对象呢？
+
+如上所述，我们自己在程序里面创建的这些Function Array String Boolean Number Date的各个实例化对象的__proto__属性的原型对象（例如new Date().__proto__）实际上是一个Object的实例化对象，该实例化对象自然也有__proto__属性（即new Date().__proto__.__proto__），该对象实际上就是Object的原型对象（即Object.prototype）
+
+我们再网上追溯，Object的原型对象也是对象，那么它必然也有__proto__属性，这个属性是谁呢？由于已经到达了最顶层，因此该属性的值为null：
+new Date().__proto__.__proto__ === Object.prototype //true
+new Date().__proto__.__proto__.__proto__ === null //true
+
+在ECMA的基础之上，浏览器利用这些特性定义了很多构造函数和对象，例如浏览器定义了名为window的全局对象，该对象的构造函数是Window，上面提到浏览器解析html和css时会构造出很多对象，并组成一个树结构，例如html标签会被HTML解析为
+
+随后在1999年12月，ECMAScript3诞生
+
+============================
 
 现如今我们看到的网页非常复杂，有文字，图片，各种动画，音频，视频等等，不同的文字还可以有不同的字体。而最初的网页则非常简单，追溯历史，最早的一款商用浏览器是Netscape（网景）公司开发的Netscape（网景）浏览器
 
@@ -54,3 +89,5 @@ JavaScript发展历史 http://blog.csdn.net/lzm18064126848/article/details/53575
 搜索引擎发展历史 https://sanwen8.cn/p/3dfJXVS.html
 JavaScript作者自述 https://brendaneich.com/2008/04/popularity/
 web应用发展历史 http://blog.jobbole.com/45169/
+JavaScript维基百科 https://en.wikipedia.org/wiki/JavaScript
+ECMAScript维基百科 https://en.wikipedia.org/wiki/ECMAScript
