@@ -1,0 +1,298 @@
+根据上篇的分析，我们接下来思考一下有哪些功能应该独立封装出来
+
+首先，从整体结构上看，比较繁琐的部分主要在DOM操作这一块，例如：
+1、拿到数据之后创建DOM，并对其设置属性及样式等（className innerHTML，对于表单元素有type value自定义的属性等等）
+2、获取某些DOM元素，并对其设置属性及样式（在点击顶一下发送ajax成功之后的回调中获取顶的数量并增加1）
+
+因此我们发现DOM元素是一切问题的核心
+
+我们先来看获取DOM元素，上一篇中我们提到了通过querySelector或querySelectorAll可以通过传入css选择器的方式获取DOM元素，看似很方便，实则存在巨大的坑，不过我们可以先暂时放一下这个坑，先思考一下如何实现获取DOM元素。
+
+实际上如果我们自己封装一个方法获取DOM元素的话，很自然的应该设计为传入两个参数，一个是选择器，另一个是要在哪个上下文中获取：
+
+function getEles(selector, context){
+    context = context || document;
+    return context.querySelectorAll(selector);
+}
+
+对于如下的html：
+<body>
+<div id="foo">
+    <p class="warning">This is a sample warning</p>
+    <p class="error">This is a sample error</p>
+</div>
+<div id="bar">
+    <p>...</p>
+</div>
+</body>
+
+当我们在全局上下文（document）中获取所有DOM节点时，没啥问题
+getEles(".warning, .error"); // [<p class="warning">This is a sample warning</p>,<p>This is a sample error</p>]
+
+但是当我们在某个元素作为上下文时获取DOM节点时，就会有误会：
+var foo= document.getElementById("foo");
+getEles("div > p"); // [<p class="warning">This is a sample warning</p>,<p>This is a sample error</p>]
+
+可以看到返回结果不变，但是foo下面的确没有div下面再有p啊
+
+再看规范如何定义：
+querySelectorAll : when invoked, return a NodeList containing all of the matching Element nodes within the node’s subtrees, in document order.
+Even though the method is invoked on an element, selectors are still evaluated in the context of the entire document.
+
+规范定义为选择器以整个文档为基准，查找全部符合选择器描述的节点（即使通过某个元素来调用也是以整个文档为基准来获取），然后判断返回的 NodeList 是否在 Element 子树内，如果是在 Element 子树内，则这些节点组成 NodeList 返回，其排序需与文档原始节点排序一致。
+
+这样看来，我们自己的理解和标准还是有偏差，querySelectorAll确实是按照标准来的，不过这样用起来就会不方便，因此我们需要自己改造它。
+
+jQuery改造的手段是sizzle，由于sizzle是jQuery中最复杂的内容（没有之一），里面用到了大量复杂的正则，而且还需要有一定编译原理前端的基础，因此我们在本系列最后再讨论，此处先简单处理一下：
+
+function getEles(selector, context){
+    context = context || document;
+    var res = context.querySelectorAll(selector);
+    if (context !== document) {
+        res = _getElesBelongToSpecPar(res, context);
+    }
+    return res;
+}
+// 以下划线开头，仅供内部使用的私有方法
+function _getElesBelongToSpecPar(res, context){
+    var collection = [];
+    var oCurParNode;
+    for(var i = 0; i < res.length; i++){
+        oCurParNode = res[i].parentNode;
+        while(oCurParNode.parentNode){
+            if (context === oCurParNode) {
+                collection.push(res[i]);
+                break;
+            }
+            oCurParNode = oCurParNode.parentNode;
+        }
+    }
+    return collection;
+}
+
+// 测试代码
+console.log(getEles(".warning, .error"));
+console.log(getEles("p", document.getElementById("bar")));
+
+// 结果
+(2) [p.warning, p.error]
+    length: 2
+    0: p.warning
+    1: p.error
+    __proto__: NodeList
+[p]
+    0: p
+    length: 1
+    __proto__: Array(0)
+
+从结果中看，发现两种方式返回的对象的原型（__proto__）不一样，这个我们稍后会统一处理成类数组的形式
+
+接下来我们再来看创建元素，创建元素就显得比较简单了
+function createEle(tagName){
+    return document.createElement(tagName);
+}
+
+获取或创建完元素之后显然是为了用起来更方便的，而不是为了看起来更好看，使用的话无非也就是设置属性，绑定事件等等这些工作，接下来我们试图用一下我们刚才封装的方法：
+首先看获取元素的情况：
+var aEles = getEles(".warning, .error");
+// 获取到的是一个数组或类数组，因此需要遍历每个元素分别设置
+for(var i = 0; i < aEles.length; i++){
+    // 假设data是服务器端返回数据
+    aEles[i].innerHTML = data[i];
+}
+
+再来看创建元素的情况：
+var oEle = createEle("li");
+oEle.onclick = function(){};
+
+可以发现，由于获取元素得到的是元素集合，而创建元素得到的是单个元素，因此处理的方式不同，处理方式不同就造成了一定不便。因此，我们需要把这两种返回结果统一一下，很明显返回数组的形式的话外部就可以不用判断是哪种情况直接循环即可：
+function createEle(tagName){
+    return [document.createElement(tagName)];
+}
+
+var aEle = createEle("li");
+for(var i = 0; i < aEle.length; i++){
+    aEle[i].onclick = function(){};
+}
+
+而创建和获取最后都是得到元素的集合，不妨把它们合成一个方法，通过传入不同形式的参数来判断：
+假如我们希望传入"<div>"、"<li>"、"<a>"等这些形式来创建元素（规律就是<开头，>结尾），希望传入".wrap"、"#title"等选择器形式来获取元素，函数就变成了
+var rElementTag = /<([^<]+)>/g;
+function ele(selector, context){
+    // 判断创建元素的情况
+    var aRes = selector.match(rElementTag);
+    if (aRes && aRes[1]) {
+        return [document.createElement(aRes[1])];
+    } else {
+        context = context || document;
+        var res = context.querySelectorAll(selector);
+        if (context === document) {
+            res = _getElesBelongToSpecPar(res, context);
+        }
+        return res;
+    }
+}
+
+统一起来了之后，由于返回的是数组或类数组，因此每调用一次就得到一个数组然后开始一次循环遍历，显然非常繁琐，如果我们可以采用某种手段把遍历统一管理起来明显效果更好，例如我们希望这样调用：
+ele(".wrap .info").onclick(function(){}); // 将类名符合.wrap .info的所有元素都绑定一个函数
+ele(".menu .item").innerHTML("首页"); // 将.menu .item这个元素里面的内容设置为"首页"
+
+以上效果说白了就是我们希望返回的对象有一些方法，这些方法里面帮我们完成循环遍历DOM再执行相应的功能这部分工作，注意我们上面写的onclick和innerHTML是自定义的方法，仅仅是名字和原生js的事件或属性比较像，实际上在封装自定义方法时不应该同名，以避免一定误会：
+ele(".wrap .info").click(function(){}); // 将类名符合.wrap .info的所有元素都绑定一个函数
+ele(".menu .item").html("首页"); // 将.menu .item这个元素里面的内容设置为"首页"
+
+现在我们需要自定义方法了，很明显需要用到面相对象的思想，因此我们将ele当成构造函数，然后在原型上添加click和html方法，这样每个实例化对象就都拥有这些方法了，此处我们顺便把两种情况的返回值都该成类数组，至于什么是类数组，具体返回什么形式，请看具体实现：
+var rElementTag = /<([^<]+)>/g;
+function ele(selector, context){
+    var aRes = selector.match(rElementTag);
+    if (aRes && aRes[1]) {
+        // 创建的时候只会创建一个元素，因此给实例化对象一个名为"0"的属性
+        // 虽然下面我们直接写成了this[0]，但是js会给我们处理成this["0"]
+        this[0] = document.createElement(aRes[1]);
+        this.context = document;
+        // 注意this是我们自定义的对象，因此所有属性我们需要自己维护
+        // 如果我们希望有一个属性表明当前实例化对象有几个元素，就需要自己增加一个length属性
+        this.length = 1;
+    } else {
+        context = context || document;
+        var res = context.querySelectorAll(selector);
+        if (context === document) {
+            res = _getElesBelongToSpecPar(res, context);
+        }
+        for(var i = 0; i < res.length; i++){
+            this[i] = res[i];
+        }
+        this.context = context;
+        this.length = res.length;
+    }
+}
+ele.prototype.click = function(){}; // 函数体内部放我们具体的循环遍历所有对象并加以处理的实现
+ele.prototype.html = function(){};
+
+至此，我们应该大概知道什么叫类数组了，其实就是也可以通过o[0] o[1] o[2]等方括号的形式访问到，但是只有length这一个或几个属性，并没有真正的数组所有的属性和方法，事实上0 1 2这些看起来像下标的东西实际上可以理解为属性
+
+好的，内部进行循环的处理我们也实现了，但是既然是构造函数，就必须通过new ele(".wrap .info")这样来调用内部的this指针才会正确，但是到目前为止来看我们这个构造函数的调用频率会非常高，每次都写一个new也很麻烦，因此我们希望不通过new来得到实例化对象，解决这个问题有两种方案：
+
+方案一：函数内部手动判断this指向，如果指向了window代表没有用new来构建
+function ele(selector, context){
+    if (this === window) {
+        return new ele(selector, context);
+    }
+    var aRes = selector.match(rElementTag);
+    if (aRes && aRes[1]) {
+        this[0] = document.createElement(aRes[1]);
+        this.context = document;
+        this.length = 1;
+    } else {
+        context = context || document;
+        var res = context.querySelectorAll(selector);
+        if (context === document) {
+            res = _getElesBelongToSpecPar(res, context);
+        }
+        for(var i = 0; i < res.length; i++){
+            this[i] = res[i];
+        }
+        this.context = context;
+        this.length = res.length;
+    }
+}
+
+方案二：返回另外一个函数（暂时称为真实构造函数）的实例化对象，然后手动将函数ele的原型赋给真实构造函数的原型
+function ele(selector, context){
+    // this.init就是上面提到的真实的构造函数
+    return new ele.prototype.init(selector, context);
+}
+ele.prototype.init = function(selector, context){
+    var aRes = selector.match(rElementTag);
+    if (aRes && aRes[1]) {
+        this[0] = document.createElement(aRes[1]);
+        this.context = document;
+        this.length = 1;
+    } else {
+        context = context || document;
+        var res = context.querySelectorAll(selector);
+        if (context === document) {
+            res = _getElesBelongToSpecPar(res, context);
+        }
+        for(var i = 0; i < res.length; i++){
+            this[i] = res[i];
+        }
+        this.context = context;
+        this.length = res.length;
+    }
+};
+// ele.prototype.init也是一个函数，既然是函数就会有prototype原型属性，每个函数的prototype的值都不一样，我们在此手动将ele.prototype赋给了ele.prototype.init的prototype，从而达到了new this.init()得到的对象也可以调用ele构造函数实例化对象的方法的效果
+ele.prototype.init.prototype = ele.prototype;
+ele.prototype.click = function(){};
+ele.prototype.html = function(){};
+
+最后，我们把构造函数ele的名字改成jQuery，就跟jQuery非常像了，为了区分，我们改成mQuery：
+function mQuery(selector, context){
+    return new mQuery.prototype.init(selector, context);
+}
+mQuery.prototype.init = function(selector, context){
+    var aRes = selector.match(rElementTag);
+    if (aRes && aRes[1]) {
+        this[0] = document.createElement(aRes[1]);
+        this.context = document;
+        this.length = 1;
+    } else {
+        context = context || document;
+        var res = context.querySelectorAll(selector);
+        if (context === document) {
+            res = _getElesBelongToSpecPar(res, context);
+        }
+        for(var i = 0; i < res.length; i++){
+            this[i] = res[i];
+        }
+        this.context = context;
+        this.length = res.length;
+    }
+};
+
+mQuery.prototype.init.prototype = mQuery.prototype;
+mQuery.prototype.click = function(){};
+mQuery.prototype.html = function(){};
+
+如果我们希望外部通过$调用构造函数的话可以用匿名函数自执行的方式将所有代码包裹起来，只将$开放出去即可：
+(function(window, undefined){
+    function mQuery(){
+        // ...
+    }
+    window.$ = mQuery;
+})(window, undefined);
+
+此外，在这里我们把window和undefined作为参数传了进去，这么做的原因主要有以下几点：
+1、匿名函数内部访问window时，缩短window查找的作用域范围
+2、代码压缩时window和undefined可以被压成很短的名字
+3、可以确保undefined的确是undefined，在低版本浏览器下undefined的值可以被修改
+
+最后说一下接下来的工作，目前我们只是把创建和获取元素抽取出来，除此之外还有很多比较难用的模块，简单总结一下：
+1、DOM遍历：寻找指定位置的DOM节点，例如前驱节点，后继节点，兄弟节点，父节点，子节点等等
+2、DOM增删：将元素插入到某个位置，例如插入到指定元素的前面，后面，插入到父级下所有元素的最后面，所有元素的最开头，克隆某个节点，移除某个节点
+3、向节点中插入内容：插入一个html片段，插入纯文本
+4、css样式操作 设置/获取 各种宽度、高度、x坐标、y坐标
+5、属性操作 属性和特性有何区别，设置/获取/删除属性和特性，class类操作
+6、ajax数据请求
+我们介绍这些模块的原则是说清楚解决思路并给出几个方法的实现即可，在此基础上完全可以再扩展其他方法
+在每个模块的实现过程中我们会遇到一些公共的基础的部分，会统一封装成底层基础函数库以供调用
+
+最后附赠内容：
+动画
+BOM属性封装
+=================================================================================
+
+接下来在属性操作时，我们直接在DOM对象上附加了某个自定义属性：
+oSupportButton.comment_id = aComments[i].comment_id;
+如果不搞清楚浏览器处理属性和特性的机制，很容易入坑
+
+
+
+此外样式操作，直接给className属性赋值也是风险比较大的做法，万一这个DOM对象上原来有一些类了，直接覆盖会导致样式错乱：
+oCommentContent.className = "content";
+
+
+在把评论列表创建出来之后紧接着要对顶一下和踩一下加事件，事件里面还得发送ajax请求，发送这个请求又得创建xhr对象，重复工作
+
+=========================
+querySelector 和 querySelectorAll 方法浏览器实现无误，避免将其与 JQuery 的选择器混淆 http://w3help.org/zh-cn/casestudies/003#header_3
