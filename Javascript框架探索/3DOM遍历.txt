@@ -1,0 +1,32 @@
+上一篇最后我们提到了我们接下来的工作就是给实例化对象添加方法，很明显这些方法肯定得添加到原型上，由此我们可以猜测我们接下来的代码可能大概是这个样：
+
+mQuery.prototype.xxx = function(){};
+
+mQuery.prototype.yyy = function(){};
+
+mQuery.prototype.zzz = function(){};
+
+我们暂且先按照这个思路来写，遇到问题时再想办法解决
+
+本篇我们首先来看DOM遍历，首先需要明确我们要添加哪些方法：
+prev()                      寻找元素的前面一个节点
+next()                      寻找元素的后面一个节点
+siblings(isContainSelf)     寻找元素的所有兄弟节点，通过传入布尔值参数判断是否包含当前元素
+children()                  寻找元素的所有子节点
+parent()                    寻找元素的直接父级
+parents(".js-spec-par")     沿着html结构一层一层往上找，直到找到.js-spec-par并返回
+
+从第一个方法prev开始实现：
+mQuery.prototype.prev = function(){
+    // 注意此处的this是一个类数组，需要循环遍历
+    var cur;
+    var res = [];
+    for (var i = 0; i < this.length; i++) {
+        cur = this[i].previousSibling;
+        while(cur){
+            if (cur.nodeType == 1) {
+                res.push(cur);
+            }
+        }
+    }
+};
