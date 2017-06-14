@@ -1,0 +1,181 @@
+上一篇最后我们提到了我们接下来的工作就是给实例化对象添加方法，很明显这些方法肯定得添加到原型上，由此我们可以猜测我们接下来的代码可能大概是这个样：
+
+mQuery.prototype.xxx = function(){};
+
+mQuery.prototype.yyy = function(){};
+
+mQuery.prototype.zzz = function(){};
+
+我们暂且先按照这个思路来写，遇到问题时再想办法解决
+
+本篇我们首先来看DOM遍历，首先需要明确我们要添加哪些方法：
+prev()                      寻找元素的前面一个节点，如果有多个元素则返回所有元素的前驱节点
+next()                      寻找元素的后面一个节点
+siblings(isContainSelf)     寻找元素的所有兄弟节点，通过传入布尔值参数判断是否包含当前元素
+children()                  寻找元素的所有子节点
+parent()                    寻找元素的直接父级
+parents(".js-spec-par")     沿着html结构一层一层往上找，直到找到.js-spec-par并返回
+
+从第一个方法prev开始实现：
+mQuery.prototype.prev = function(){
+    // 注意此处的this是一个类数组，需要循环遍历
+    var cur;
+    var res = [];
+    // 循环mQuery实例化对象里面的各项
+    for (var i = 0; i < this.length; i++) {
+        cur = this[i].previousSibling;
+        // 为了兼容，使用previousSibling而没用previousElementSibling
+        // 但是previousSibling会遍历到所有类型的节点
+        // 因此开个循环，当得到文本节点时再存入结果集
+        while(cur){
+            if (cur.nodeType == 1) {
+                res.push(cur);
+                // 由于前驱节点只有一个，因此找到之后就停掉循环
+                break;
+            }
+            // 转到下一节点继续
+            cur = cur["previousSibling"];
+        }
+    }
+    // 我们希望外部能够链式调用，即$(".div1").prev().click(function(){})
+    // 此时拿到的res是一个数组，并不是一个真正的mQuery对象，因此需要将其转为mQuery对象
+    for(var i = 0; i < res.length; i++){
+        this[i] = res[i];
+    }
+    this.context = this.context || document;
+    this.length = res.length;
+};
+
+有了获取前驱节点的思路，后继节点就很简单了
+mQuery.prototype.next = function(){
+    var cur;
+    var res = [];
+    for (var i = 0; i < this.length; i++) {
+        cur = this[i].nextSibling;
+        while(cur){
+            if (cur.nodeType == 1) {
+                res.push(cur);
+                break;
+            }
+            cur = cur["nextSibling"];
+        }
+    }
+
+    for(var i = 0; i < res.length; i++){
+        this[i] = res[i];
+    }
+    this.context = this.context || document;
+    this.length = res.length;
+};
+
+明显重复代码太多，因此接下来的工作必然是抽离公共部分
+很显然一个调用previousSibling，一个调用nextSibling，因此肯定得作为参数传入
+function _getSiblings(fnDir){
+    var cur;
+    var res = [];
+    for (var i = 0; i < this.length; i++) {
+        cur = this[i][fnDir];
+        while(cur){
+            if (cur.nodeType == 1) {
+                res.push(cur);
+                break;
+            }
+            cur = cur[fnDir];
+        }
+    }
+    return res;
+}
+
+而通过数组得到原生对象这个操作，在init方法里面已经用到过一次了，因此我们计划在init、prev、next以及接下来要实现的siblings、children、parents等方法全都统一起来，因此单独抽成一个方法
+function _getMQueryObjFromEleArray(aEle){
+    for(var i = 0; i < aEle.length; i++){
+        this[i] = aEle[i];
+    }
+    this.context = this.context || document;
+    this.length = aEle.length;
+    return this;
+}
+
+值得注意的是，getSiblings和getMQueryObjFromEleArray这两个方法里面都用到了this，对此我们在调用的时候用call或apply来调用以避免this指针出错的问题，这样代码就变为：
+mQuery.prototype.prev = function(){
+    _getMQueryObjFromEleArray.call(this, _getSiblings.call(this, "previousSibling"));
+};
+mQuery.prototype.next = function(){
+    _getMQueryObjFromEleArray.call(this, _getSiblings.call(this, "nextSibling"));
+};
+
+再说一个小问题，在函数_getSiblings里面有这么一句：
+
+if (cur.nodeType == 1) {
+
+这句话的意思是判断当前节点的节点类型如果是元素节点则执行条件体里面内容，这里我们的写法并不好，因为人类并不擅长记忆数字对应的某个意义是什么，例如这里用1代表元素节点的意思，但是时间长了再看这段代码可能就忘了这个1是哪种节点了，因此我们采用枚举来解决该问题
+
+var NODE_TYPE = {
+    ELE: 1
+};
+if (cur.nodeType == NODE_TYPE.ELE) {
+
+这样看起来就更加形象
+
+接下来实现siblings方法，该方法接收一个布尔值参数，代表是否包含当前元素
+我们的思路大概如下：
+先获取当前节点之前的所有兄弟节点，放到一个数组aPrev中
+再获取当前节点之后的所有兄弟节点，放到一个数组aNext中
+再拼接起来处理成mQuery对象返回去
+现在我们肯定想要尽量调用刚才封装好的方法，但是刚才封装好的方法有个特点就是只获取一个节点（前驱或后继），而我们目前要获取一组节点（当前节点之前/之后的所有兄弟节点）
+while(cur){
+    if (cur.nodeType == NODE_TYPE.ELE) {
+        res.push(cur);
+        break;
+    }
+    cur = cur[fnDir];
+}
+我们可以通过一个参数控制捕获几个元素节点，而不是现在这样遇到一个元素节点就直接break结束
+while(cur){
+    if (cur.nodeType == NODE_TYPE.ELE && ( (num == undefined) || num-- ) ) {
+        res.push(cur);
+    }
+    cur = cur[fnDir];
+}
+如果我们不传num的话（即num为undefined）则条件(num == undefined) || num--为真，将会把所有当前循环方向的元素收集起来。经过测试，当一个节点没有前驱节点或后继节点时访问previousSibling或nextSibling会返回null，在IE8中由于previousSibling或nextSibling只访问元素节点，因此循环次数会比其他浏览器少，但是并不影响效果。
+这样我们的siblings方法就可以实现如下：
+mQuery.prototype.siblings = function(isContainSelf){
+    var aPrev = _getSiblings.call(this, "previousSibling");
+    var aCur = [this[0]];
+    var aNext = _getSiblings.call(this, "nextSibling");
+
+    return _getMQueryObjFromEleArray.call(
+        this, 
+        aPrev.concat(isContainSelf ? aCur : [] ).concat(aNext)
+    );
+};
+
+接下来是children方法，我们可以先获取到当前mQuery实例化对象里各个元素的第一个节点（firstChild），再获取该节点的所有兄弟节点，但是问题来了_getSiblings函数内部的this是按照mQuery实例化对象处理的，因此我们肯定得想办法传入mQuery实例化对象，以现在的情况而言，我们必须循环遍历当前mQuery实例化对象里面的各个元素，再把各个元素转成mQuery对象传入处理，而目前我们的代码中并没有把原生DOM转为mQuery对象的接口，而这个操作也是返回一个DOM集合，因此我们肯定放到init函数里面，将这种情况合并到创建元素返回DOM集合，获取元素返回DOM集合这些情况中：
+mQuery.prototype.init = function(selector, context){
+    // 此处需要判断selector传入的类型，先简单处理成typeof判断，到本篇最后我们独立讨论这块内容
+    if (typeof selector == "string") {
+        ...
+    } else if (selector.nodeType && selector.nodeType == NODE_TYPE.ELE) {
+        // 如果是原生DOM元素
+        _getMQueryObjFromEleArray.call(this, [selector]);
+    }
+};
+接下来我们就可以利用该特性实现children方法了：
+mQuery.prototype.children = function(){
+    var aChildren = [];
+    for(var i = 0; i < this.length; i++){
+        // 我们得让_getSiblings里面的this依次指向当前mQuery对象的各项的firstChild，再分别获取其兄弟节点，再拼接起来
+        aChildren.concat(_getSiblings.call($(this[i].firstChild), "nextSibling"));
+    }
+    return _getMQueryObjFromEleArray.call(this, aChildren);
+};
+
+这样虽然可以做到，但是我们可以发现在children中我们遍历了一遍mQuery实例化对象，在_getSiblings中又遍历了一遍mQuery实例化对象，而且在_getSiblings中遍历的那次是把原来的mQuery实例化对象里面的各项先拆解成一个个原生DOM对象，再构造成jQuery对象，这样做明显非常别扭。此时肯定会有一个疑问：为什么不能和prev和next一样在_getSiblings内部处理遍历呢，原因就在于兄弟元素访问的是同级别的节点，而子元素已经跨级别了，因此处理上肯定有区别，如果依然这样一意孤行的走下去，由于parent和parents也跨级别了，因此肯定会出现同样的问题。
+
+想要解决该问题也很简单，我们只需要把循环遍历这部分代码拿到外面来，让_getSiblings只对单个原生DOM对象节点操作，这样的粒度就比较小了，但这样做的话问题又来了，我们当初把循环遍历mQuery实例化对象放在_getSiblings内部处理的原因就是为了避免写重复代码，现在要是拿出来在prev、next、siblings等方法里再各写一遍不又回到之前的问题中了么，这个问题不用着急，我们自有解决它的办法。
+
+由于本次代码修改量比较大，因此我们单独抽出到另外一个文件中，以上代码github地址：
+
+
+
+判断类型

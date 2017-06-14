@@ -142,7 +142,9 @@ ele(".wrap .info").click(function(){}); // 将类名符合.wrap .info的所有�
 ele(".menu .item").html("首页"); // 将.menu .item这个元素里面的内容设置为"首页"
 
 现在我们需要自定义方法了，很明显需要用到面相对象的思想，因此我们将ele当成构造函数，然后在原型上添加click和html方法，这样每个实例化对象就都拥有这些方法了，此处我们顺便把两种情况的返回值都该成类数组，至于什么是类数组，具体返回什么形式，请看具体实现：
-var rElementTag = /<([^<]+)>/g;
+// 注意rElementTag正则并没有加全局匹配模式，因为只有非全局匹配模式才可以在结果数组中获取到分组信息
+// 全局匹配模式下得到的数组是所有匹配的子串，没有任何分组信息
+var rElementTag = /<([^<]+)>/;
 function ele(selector, context){
     var aRes = selector.match(rElementTag);
     if (aRes && aRes[1]) {
@@ -280,9 +282,13 @@ mQuery.prototype.html = function(){};
 以下是上一篇没有提到的功能，但是用的也比较多，因此我们也会实现
 7、动画
 8、BOM属性封装
+
+最后便是框架的精华部分
 9、sizzle引擎
 
 在每个模块实现的过程中，实际上我们的工作主要是添加实例化方法，这样通过$(xxx)得到的实例化对象就可以调用各种各样的方法实现不同的功能了
+
+注意：我们所有的代码会保证兼容到IE8，更低版本的浏览器将不再考虑
 
 本节代码github地址：https://github.com/zhaohuiziwo901/CourseExample/blob/master/Javascript%E6%A1%86%E6%9E%B6%E6%8E%A2%E7%B4%A2/2%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84%E5%92%8CDOM%E8%8E%B7%E5%8F%96%E4%B8%8E%E5%88%9B%E5%BB%BA.html
 =================================================================================

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>3DOM遍历</title>
+	<style>	
+	.wrap div{ width: 100px; height: 100px; background: red; margin: 10px; }
+	</style>
+	<script>
+		(function(window, undefined){
+			var rElementTag = /<([^<]+)>/;
+			var NODE_TYPE = {
+				ELE: 1
+			};
+
+			function mQuery(selector, context){
+			    return new mQuery.prototype.init(selector, context);
+			}
+			mQuery.prototype.init = function(selector, context){
+			    var aRes = selector.match(rElementTag);
+			    if (aRes && aRes[1]) {
+			        // this[0] = document.createElement(aRes[1]);
+			        // this.context = document;
+			        // this.length = 1;
+					_getMQueryObjFromEleArray.call(this, [document.createElement(aRes[1])]);
+			    } else {
+			        context = context || document;
+			        var res = context.querySelectorAll(selector);
+			        if (context !== document) {
+			            res = _getElesBelongToSpecPar(res, context);
+			        }
+			        // for(var i = 0; i < res.length; i++){
+			        //     this[i] = res[i];
+			        // }
+			        // this.context = context;
+			        // this.length = res.length;
+			        this.context = context;
+					_getMQueryObjFromEleArray.call(this, res);
+			    }
+			};
+
+			// 以下划线开头，仅供内部使用的私有方法
+			function _getElesBelongToSpecPar(res, context){
+			    var collection = [];
+			    var oCurParNode;
+			    for(var i = 0; i < res.length; i++){
+			        oCurParNode = res[i].parentNode;
+			        while(oCurParNode){
+			            if (context === oCurParNode) {
+			                collection.push(res[i]);
+			                break;
+			            }
+			            oCurParNode = oCurParNode.parentNode;
+			        }
+			    }
+			    return collection;
+			}
+
+			// DOM遍历
+			mQuery.prototype.prev = function(){
+				return _getMQueryObjFromEleArray.call(this, _getSiblings.call(this, "previousSibling", 1));
+			};
+			mQuery.prototype.next = function(){
+				return _getMQueryObjFromEleArray.call(this, _getSiblings.call(this, "nextSibling", 1));
+			};
+			mQuery.prototype.siblings = function(isContainSelf){
+				var aPrev = _getSiblings.call(this, "previousSibling");
+				var aCur = [this[0]];
+				var aNext = _getSiblings.call(this, "nextSibling");
+
+				return _getMQueryObjFromEleArray.call(
+					this, 
+					aPrev.concat(isContainSelf ? aCur : [] ).concat(aNext)
+				);
+			};
+
+			function _getMQueryObjFromEleArray(aEle){
+				for(var i = 0; i < aEle.length; i++){
+					this[i] = aEle[i];
+				}
+				this.context = this.context || document;
+				this.length = aEle.length;
+				return this;
+			}
+
+			function _getSiblings(fnDir, num){
+				var cur;
+				var res = [];
+				for (var i = 0; i < this.length; i++) {
+					cur = this[i][fnDir];
+					while(cur){
+						if (cur.nodeType == NODE_TYPE.ELE && ( (num == undefined) || num-- )) {
+							res.push(cur);
+						}
+						cur = cur[fnDir];
+					}
+				}
+				return res;
+			}
+
+			mQuery.prototype.init.prototype = mQuery.prototype;
+
+			window.$ = mQuery;
+		})(window, undefined);
+	</script>
+</head>
+<body>
+	<div class="wrap">
+		<div class="div1"></div>
+		<div class="div2"></div>
+		<div class="div3"></div>
+		<div class="div4"></div>
+		<div class="div5"></div>
+	</div>
+</body>
+<script>
+	console.log($(".div2").siblings(true));
+</script>
+</html>
