@@ -132,7 +132,7 @@ while(cur){
 }
 我们可以通过一个参数控制捕获几个元素节点，而不是现在这样遇到一个元素节点就直接break结束
 while(cur){
-    if (cur.nodeType == NODE_TYPE.ELE && ( (num == undefined) || num-- ) ) {
+    if (cur.nodeType == NODE_TYPE.ELE) {
         res.push(cur);
     }
     cur = cur[fnDir];
@@ -174,8 +174,93 @@ mQuery.prototype.children = function(){
 
 想要解决该问题也很简单，我们只需要把循环遍历这部分代码拿到外面来，让_getSiblings只对单个原生DOM对象节点操作，这样的粒度就比较小了，但这样做的话问题又来了，我们当初把循环遍历mQuery实例化对象放在_getSiblings内部处理的原因就是为了避免写重复代码，现在要是拿出来在prev、next、siblings等方法里再各写一遍不又回到之前的问题中了么，这个问题不用着急，我们自有解决它的办法。
 
-由于本次代码修改量比较大，因此我们单独抽出到另外一个文件中，以上代码github地址：
+由于本次代码修改量比较大，因此我们单独抽出到另外一个文件中，将该版本代码留存一份，github代码地址为
+https://github.com/zhaohuiziwo901/CourseExample/blob/master/JavascriptLibraryExplore/3-dom-traverse.html
 
+修改过后的代码大概变成了下面的样子：
+
+mQuery.prototype.prev = function(){
+    var aRes = [];
+    // 循环遍历mQuery实例化对象，取出每次遍历到的DOM对象传入_getSiblings中处理
+    for(var i = 0; i < this.length; i++){
+        aRes = aRes.concat(_getSiblings(this[i], "previousSibling", 1));
+    }
+    // 当_getMQueryObjFromEleArray函数用的多了起来之后，用call调用就会非常不便
+    // 因此改为将当前实例化对象作为参数传入的方式更加简洁
+    return _getMQueryObjFromEleArray(this, aRes);
+};
+mQuery.prototype.next = function(){
+    var aRes = [];
+    for(var i = 0; i < this.length; i++){
+        aRes = aRes.concat(_getSiblings(this[i], "nextSibling", 1));
+    }
+    return _getMQueryObjFromEleArray(this, aRes);
+};
+mQuery.prototype.siblings = function(isContainSelf){
+    var aRes = [];
+    for(var i = 0; i < this.length; i++){
+        // 找到当前节点的父节点，再获取第一个子节点之后的所有节点，自然就是获取所有的兄弟节点了
+        aRes = aRes.concat(_getSiblings(this[i].parentNode.firstChild, "nextSibling"));
+    }
+    return _getMQueryObjFromEleArray(this, aRes);
+};
+
+// children的实现也就非常自然了
+mQuery.prototype.children = function(){
+    var aRes = [];
+    for(var i = 0; i < this.length; i++){
+        aRes = aRes.concat(_getSiblings(this[i].firstChild, "nextSibling"));
+    }
+    return _getMQueryObjFromEleArray(this, aRes);
+};
+
+// 对于_getSiblings函数，里面的for循环得去掉，mQuery实例化对象也得换成DOM原生对象：
+// ele是新增的参数，该参数代表原生DOM对象
+function _getSiblings(ele, fnDir, num){
+    var cur;
+    var res = [];
+
+    // 如果传入的原生对象参数为空，直接返回空数组，代表没有找到
+    if (!ele) {
+        return res;
+    }
+    // cur就是
+    cur = ele[fnDir];
+    while(cur){
+        if (cur.nodeType == NODE_TYPE.ELE) {
+            res.push(cur);
+            if ((num != undefined) && (--num == 0)) {
+                break;
+            }
+        }
+        cur = cur[fnDir];
+    }
+    return res;
+}
+
+最后再对_getMQueryObjFromEleArray做一些修改，有这样一种情况：
+当传入的aEle参数是空数组时，虽然将length属性也变为0了，但是由于没走for循环，之前的mQuery实例化对象有元素时还是会有0 1 2...这些属性存储着这些DOM对象的，例如：
+$(".div").children()
+当$(".div")选到了3个元素，则$(".div")对象将有0 1 2这3个属性，当这3个元素都没有子元素时$(".div").children()应当返回空数组，但是由于目前我们的_getMQueryObjFromEleArray实现是每次在链式调用的时候操作的是第一次调用$(".div")时得到的对象，所以如果当某次链式调用需要返回空数组时aEle参数长度为0，此时将没有机会清空我们的$(".div")对象中的0 1 2各项值，因此需要判断出长度为0的情况手动清空：
+function _getMQueryObjFromEleArray(oMQuery, aEle){
+    // 判断出长度为0的情况手动清空
+    if (aEle.length == 0) {
+        for(var i = 0; i < oMQuery.length; i++){
+            delete oMQuery[i];
+        }
+    }
+    for(var i = 0; i < aEle.length; i++){
+        oMQuery[i] = aEle[i];
+    }
+    oMQuery.context = this.context || document;
+    oMQuery.length = aEle.length;
+    return oMQuery;
+}
+当然这种处理方式不是特别好，由于每次链式操作都是操作的第一次得到的对象集合，当我们某一时刻还希望用到最初的这个对象集合时有可能发现它已经被改了，我们后期会有更好的方式，我们目前先着眼于解决当下遇到的问题
+
+代码写到这里之后问题也很明显，首先我们早就预料到的问题，prev next siblings children里面每个方法的实现都有一个循环，而且这几个方法的实现方式有很多共同点，但又略有差异，我们必然要将其合并
+
+接下来我们可以观察一下这几个实现的共同点到底是什么，其实它们的流程非常像，都是遍历一个元素集合，拿到里面的每个元素之后执行相应的操作，随后再把数组转成mQuery对象。注意刚才提到的拿到每个元素之后执行的操作是不同的，于是我们可以定义一个数组专门存储不一样的地方，把一样的地方做统一处理，此处代码改动也比较大，因此我们再保留一个版本，github代码地址：
 
 
 判断类型

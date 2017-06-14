@@ -290,7 +290,7 @@ mQuery.prototype.html = function(){};
 
 注意：我们所有的代码会保证兼容到IE8，更低版本的浏览器将不再考虑
 
-本节代码github地址：https://github.com/zhaohuiziwo901/CourseExample/blob/master/Javascript%E6%A1%86%E6%9E%B6%E6%8E%A2%E7%B4%A2/2%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84%E5%92%8CDOM%E8%8E%B7%E5%8F%96%E4%B8%8E%E5%88%9B%E5%BB%BA.html
+本节代码github地址：https://github.com/zhaohuiziwo901/CourseExample/blob/master/JavascriptLibraryExplore/2-overview-and-get-or-create-dom.html
 =================================================================================
 
 接下来在属性操作时，我们直接在DOM对象上附加了某个自定义属性：

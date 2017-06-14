@@ -89,8 +89,11 @@
 				for (var i = 0; i < this.length; i++) {
 					cur = this[i][fnDir];
 					while(cur){
-						if (cur.nodeType == NODE_TYPE.ELE && ( (num == undefined) || num-- )) {
+						if (cur.nodeType == NODE_TYPE.ELE) {
 							res.push(cur);
+							if ((num != undefined) && (--num == 0)) {
+								break;
+							}
 						}
 						cur = cur[fnDir];
 					}
