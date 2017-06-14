@@ -3,7 +3,7 @@
 <head>
 	<meta charset="UTF-8">
 	<title>3DOM遍历</title>
-	<style>	
+	<style>
 	.wrap div{ width: 100px; height: 100px; background: red; margin: 10px; }
 	</style>
 	<script>
@@ -63,19 +63,19 @@
 			// DOM遍历
 			mQuery.prototype.prev = function(){
 				// return _getMQueryObjFromEleArray(this, _getSiblings.call(this, "previousSibling", 1));
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i], "previousSibling", 1));
-                }
-                return _getMQueryObjFromEleArray(this, aRes);
+				var aRes = [];
+				for(var i = 0; i < this.length; i++){
+					aRes = aRes.concat(_getSiblings(this[i], "previousSibling", 1));
+				}
+				return _getMQueryObjFromEleArray(this, aRes);
 			};
 			mQuery.prototype.next = function(){
 				// return _getMQueryObjFromEleArray(this, _getSiblings.call(this, "nextSibling", 1));
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i], "nextSibling", 1));
-                }
-                return _getMQueryObjFromEleArray(this, aRes);
+				var aRes = [];
+				for(var i = 0; i < this.length; i++){
+					aRes = aRes.concat(_getSiblings(this[i], "nextSibling", 1));
+				}
+				return _getMQueryObjFromEleArray(this, aRes);
 			};
 			mQuery.prototype.siblings = function(isContainSelf){
 				// var aPrev = _getSiblings(this, "previousSibling");
@@ -83,22 +83,22 @@
 				// var aNext = _getSiblings(this, "nextSibling");
 
 				// return _getMQueryObjFromEleArray(
-				// 	this, 
+				// 	this,
 				// 	aPrev.concat(isContainSelf ? aCur : [] ).concat(aNext)
 				// );
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i].parentNode.firstChild, "nextSibling"));
-                }
-                return _getMQueryObjFromEleArray(this, aRes);
+				var aRes = [];
+				for(var i = 0; i < this.length; i++){
+					aRes = aRes.concat(_getSiblings(this[i].parentNode.firstChild, "nextSibling"));
+				}
+				return _getMQueryObjFromEleArray(this, aRes);
 			};
-            mQuery.prototype.children = function(){
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i].firstChild, "nextSibling"));
-                }
-                return _getMQueryObjFromEleArray(this, aRes);
-            };
+			mQuery.prototype.children = function(){
+				var aRes = [];
+				for(var i = 0; i < this.length; i++){
+					aRes = aRes.concat(_getSiblings(this[i].firstChild, "nextSibling"));
+				}
+				return _getMQueryObjFromEleArray(this, aRes);
+			};
 
 			function _getMQueryObjFromEleArray(oMQuery, aEle){
                 if (aEle.length == 0) {

@@ -61,44 +61,39 @@
             }
 
             // DOM遍历
-            mQuery.prototype.prev = function(){
-                // return _getMQueryObjFromEleArray(this, _getSiblings.call(this, "previousSibling", 1));
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i], "previousSibling", 1));
+            var aDomTraverse = [
+                {
+                    // 此处的ele就是将来循环到的mQuery中的每一项
+                    "prev": function (ele) {
+                        return _getSiblings(ele, "previousSibling", 1)
+                    }
+                },{
+                    "next": function (ele) {
+                        return _getSiblings(ele, "nextSibling", 1)
+                    }
+                },{
+                    "siblings": function (ele) {
+                        return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+                    }
+                },{
+                    "children": function (ele) {
+                        return _getSiblings(ele.firstChild, "nextSibling")
+                    }
                 }
-                return _getMQueryObjFromEleArray(this, aRes);
-            };
-            mQuery.prototype.next = function(){
-                // return _getMQueryObjFromEleArray(this, _getSiblings.call(this, "nextSibling", 1));
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i], "nextSibling", 1));
+            ];
+            for(var i = 0; i < aDomTraverse.length; i++){
+                for(var attr in aDomTraverse[i]){
+                    (function (i, attr) {
+                        mQuery.prototype[attr] = function () {
+                            var aRes = [];
+                            for(var j = 0; j < this.length; j++){
+                                aRes = aRes.concat(aDomTraverse[i][attr](this[j]));
+                            }
+                            return _getMQueryObjFromEleArray(this, aRes);
+                        };
+                    })(i, attr);
                 }
-                return _getMQueryObjFromEleArray(this, aRes);
-            };
-            mQuery.prototype.siblings = function(isContainSelf){
-                // var aPrev = _getSiblings(this, "previousSibling");
-                // var aCur = [this[0]];
-                // var aNext = _getSiblings(this, "nextSibling");
-
-                // return _getMQueryObjFromEleArray(
-                // 	this,
-                // 	aPrev.concat(isContainSelf ? aCur : [] ).concat(aNext)
-                // );
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i].parentNode.firstChild, "nextSibling"));
-                }
-                return _getMQueryObjFromEleArray(this, aRes);
-            };
-            mQuery.prototype.children = function(){
-                var aRes = [];
-                for(var i = 0; i < this.length; i++){
-                    aRes = aRes.concat(_getSiblings(this[i].firstChild, "nextSibling"));
-                }
-                return _getMQueryObjFromEleArray(this, aRes);
-            };
+            }
 
             function _getMQueryObjFromEleArray(oMQuery, aEle){
                 if (aEle.length == 0) {
