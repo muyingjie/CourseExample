@@ -364,3 +364,4 @@ for(var attr in oDomTraverse){
 
 但是我们目前的代码依然存在attr和oDomTraverse这两个变量作用域太高，我们希望把这两个变量也干掉，因为以后的循环还有很多，每次循环都定义这样一个变量依然会存在污染全局的问题，而且循环条件里定义的变量通常都不会太长，比如var i = 0; var attr;等等，后面再来一个循环，变量的覆盖是肯定的。但问题是只要是循环，就得定义循环变量从而在每次循环的时候逐步改变该变量的值，慢慢接近终止条件，这也是原生循环的一大弊病，因此我们会在下一篇中分析如何在原生的循环上做增强。
 
+在此先保留一份代码，github地址：https://github.com/zhaohuiziwo901/CourseExample/blob/master/JavascriptLibraryExplore/3-dom-tranverse-3.html

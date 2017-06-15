@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3DOM遍历</title>
+    <style>
+        .wrap div{ width: 100px; height: 100px; background: red; margin: 10px; }
+    </style>
+    <script>
+        (function(window, undefined){
+            var rElementTag = /<([^<]+)>/;
+            var NODE_TYPE = {
+                ELE: 1
+            };
+
+            function mQuery(selector, context){
+                return new mQuery.prototype.init(selector, context);
+            }
+            mQuery.prototype.init = function(selector, context){
+                if (typeof selector == "string") {
+                    var aRes = selector.match(rElementTag);
+                    if (aRes && aRes[1]) {
+                        // this[0] = document.createElement(aRes[1]);
+                        // this.context = document;
+                        // this.length = 1;
+                        _getMQueryObjFromEleArray(this, [document.createElement(aRes[1])]);
+                    } else {
+                        context = context || document;
+                        var res = context.querySelectorAll(selector);
+                        if (context !== document) {
+                            res = _getElesBelongToSpecPar(res, context);
+                        }
+                        // for(var i = 0; i < res.length; i++){
+                        //     this[i] = res[i];
+                        // }
+                        // this.context = context;
+                        // this.length = res.length;
+                        this.context = context;
+                        _getMQueryObjFromEleArray(this, res);
+                    }
+                } else if (selector.nodeType && selector.nodeType == NODE_TYPE.ELE) {
+                    _getMQueryObjFromEleArray(this, [selector]);
+                }
+            };
+
+            // 以下划线开头，仅供内部使用的私有方法
+            function _getElesBelongToSpecPar(res, context){
+                var collection = [];
+                var oCurParNode;
+                for(var i = 0; i < res.length; i++){
+                    oCurParNode = res[i].parentNode;
+                    while(oCurParNode){
+                        if (context === oCurParNode) {
+                            collection.push(res[i]);
+                            break;
+                        }
+                        oCurParNode = oCurParNode.parentNode;
+                    }
+                }
+                return collection;
+            }
+
+            function _getMQueryObjFromEleArray(oMQuery, aEle){
+                if (aEle.length == 0) {
+                    for(var i = 0; i < oMQuery.length; i++){
+                        delete oMQuery[i];
+                    }
+                }
+                for(var i = 0; i < aEle.length; i++){
+                    oMQuery[i] = aEle[i];
+                }
+                oMQuery.context = this.context || document;
+                oMQuery.length = aEle.length;
+                return oMQuery;
+            }
+
+            mQuery.each = function (obj, fn){
+                if (isArrayLike(obj)) {
+                    for (var i = 0; i < obj.length; i++) {
+                        if ( fn.call(obj[i], i, obj[i]) === false ) {
+                            break;
+                        }
+                    }
+                } else if (Object.prototype.toString.call(obj) === "[object Object]") {
+                    for (var attr in obj) {
+                        if ( fn.call(obj[attr], attr, obj[attr]) === false ) {
+                            break;
+                        }
+                    }
+                }
+                return obj;
+            };
+            mQuery.prototype.each = function(fn){
+                mQuery.each(this, fn);
+            };
+            function isArrayLike(obj){
+                var isArray = Object.prototype.toString.call(obj) == "[object Array]";
+                var length = obj && obj.length;
+                var isHaveAllNumProperty = true;
+
+                if ( isArray || length === 0 ){
+                    return true;
+                } else if ( length > 0 ) {
+                    for (var i = 0; i < length; i++) {
+                        if ( !(i in obj) ) {
+                            isHaveAllNumProperty = false;
+                            break;
+                        }
+                    }
+                    return isHaveAllNumProperty;
+                } else {
+                    return false;
+                }
+            }
+
+
+            // DOM遍历模块
+            mQuery.each({
+                "prev": function (ele) {
+                    return _getSiblings(ele, "previousSibling", 1)
+                },
+                "next": function (ele) {
+                    return _getSiblings(ele, "nextSibling", 1)
+                },
+                "siblings": function (ele) {
+                    return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+                },
+                "children": function (ele) {
+                    return _getSiblings(ele.firstChild, "nextSibling")
+                },
+                "parent": function (ele) {
+                    return _getSiblings(ele, "parentNode", 1);
+                },
+                "parents": function (ele) {
+                    return _getSiblings(ele, "parentNode");
+                }
+            }, function(attr, fn){
+                mQuery.prototype[attr] = function(){
+                    var aRes = [];
+                    this.each(function(i, ele){
+                        aRes = aRes.concat(fn(ele));
+                    });
+                    return _getMQueryObjFromEleArray(this, aRes);
+                };
+            });
+
+            function _getSiblings(ele, fnDir, num){
+                var cur;
+                var res = [];
+
+                if (!ele) {
+                    return res;
+                }
+                cur = ele[fnDir];
+                while(cur){
+                    if (cur.nodeType == NODE_TYPE.ELE) {
+                        res.push(cur);
+                        if ((num != undefined) && (--num == 0)) {
+                            break;
+                        }
+                    }
+                    cur = cur[fnDir];
+                }
+                return res;
+            }
+
+            mQuery.prototype.init.prototype = mQuery.prototype;
+
+            window.$ = mQuery;
+        })(window, undefined);
+    </script>
+</head>
+<body>
+<div class="wrap">
+    <div class="div1"></div>
+    <div class="div2"></div>
+    <div class="div3"></div>
+    <div class="div4"></div>
+    <div class="div5"></div>
+    <div class="div6">
+        <div class="div6child"></div>
+    </div>
+</div>
+</body>
+<script>
+    // console.log($(document.querySelector(".wrap")));
+    console.log($(".div3").next());
+    console.log($(".div3").prev());
+    console.log($(".div3").siblings());
+    console.log($(".div3").children());
+    console.log($(".wrap").children());
+    console.log($(".div6").parent());
+    console.log($(".div6child").parents());
+
+    mQuery.each({
+
+    })
+</script>
+</html>

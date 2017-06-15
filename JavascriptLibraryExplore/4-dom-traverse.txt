@@ -1,4 +1,265 @@
-接着上篇的话题继续，原生的js中有两种循环，分别是普通的for循环和for in循环，不管是哪种循环我们使用它们的时候经常有的一个操作就是循环遍历某一项，然后执行很多动作，在这些动作中如果遇到上篇中的给某个对象添加方法的时候就会引起共享外部作用域的问题：
+接着上篇的话题继续，原生的js中有两种循环，分别是普通的for循环和for in循环，不管是哪种循环我们使用它们的时候经常有的一个操作就是循环遍历某一项，然后执行很多动作，在这些动作中如果遇到上篇中的给某个对象添加方法（或事件，事实上事件就是特殊的方法）的时候就会引起共享外部作用域的问题：
+var arr = [1, 2, 3];
+var obj = {};
 for(var i = 0; i < arr.length; i++){
-
+    aDiv[i].onclick = function(){
+        console.log(i); // i的值会出问题
+    };
 }
+解决的手段通常是手动为每次循环创建作用域：
+for(var i = 0; i < arr.length; i++){
+    (function(i, v){
+        aDiv[i].onclick = function(){
+            console.log(i, v); // i的值会出问题
+        };
+    })(i, arr[i]);
+}
+可以想象到，在循环里面的方法中可能出问题的值通常都是外部共享的变量，而在方法中可能用到的无非也就是每次循环到的索引（例如上面的i）以及循环的数组的各项arr[i]，因此我们可以将其作为参数传入
+鉴于上篇分析的普通循环的各种缺点而此种处理方式又非常常用，因此我们肯定要将其封装出来
+参数肯定是待遍历处理的对象以及处理对象里面每一项的一个方法，该方法以回调的形式传入
+遍历对象既可以是数组，也可以是json
+function each(obj, fn){
+    // 数组和json的处理形式不一样，因此要判断类型，此处先给出判断类型的方法，本篇后面会详细讨论数据类型的判断
+    if (Object.prototype.toString.call(obj) == "[object Array]") {
+        // 数组形式
+        for (var i = 0; i < obj.length; i++) {
+            if ( fn.call(obj[i], i, obj[i]) === false ) {
+                break;
+            }
+        }
+    } else if (Object.prototype.toString.call(obj) === "[object Object]") {
+        // json形式
+        for (var attr in obj) {
+            // 在回调中可以使用this，this指向的是当前遍历到的项
+            if ( fn.call(obj[attr], attr, obj[attr]) === false ) {
+                break;
+            }
+        }
+    }
+    return obj;
+}
+可以发现，虽然我们在这个函数里面也定义了attr i等变量，但它们的作用域范围仅仅是在each函数内，并没有污染到全局，因此我们上一篇中的代码可以通过调用each函数改造成：
+each({
+    "prev": function (ele) {
+        return _getSiblings(ele, "previousSibling", 1)
+    },
+    "next": function (ele) {
+        return _getSiblings(ele, "nextSibling", 1)
+    },
+    "siblings": function (ele) {
+        return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+    },
+    "children": function (ele) {
+        return _getSiblings(ele.firstChild, "nextSibling")
+    }
+}, function(attr, fn){
+    mQuery.prototype[attr] = function(){
+        var aRes = [];
+        each(this, function(i, ele){
+            aRes = aRes.concat(fn(ele));
+        });
+        return _getMQueryObjFromEleArray(this, aRes);
+    };
+});
+
+注意在
+each(this, function(i, ele)
+这句话的调用中，我们是希望each内部以数组的方式去遍历各个节点，即我们希望each内部进入
+Object.prototype.toString.call(obj) == "[object Array]"
+这个分支中去
+但是this是个实例化对象，Object.prototype.toString.call(obj)得到的结果肯定是"[object Object]"，因此不符合我们的预期
+我们的each当中Object.prototype.toString.call(obj) == "[object Array]"这个条件真正要处理的情况应该是数组以及类似数组的数据，因此我们需要封装一个方法来判断这些数据
+function isArrayLike(d){
+    var isArray = Object.prototype.toString.call(obj) == "[object Array]";
+    var length = obj && obj.length;
+    var isHaveAllNumProperty = true;
+
+    // 如果传进来的数据是以下情况：
+    // 数组
+    // 虽然不是数组但是有length属性但值为0
+    // 虽然不是数组但是有length属性但值大于0，并且有对应的数字属性
+    // 证明其实类数组
+
+    if ( isArray || length === 0 ){
+        return true;
+    } else if ( length > 0 ) {
+        for (var i = 0; i < length; i++) {
+            if ( !(i in obj) ) {
+                isHaveAllNumProperty = false;
+                break;
+            }
+        }
+        return isHaveAllNumProperty;
+    } else {
+        return false;
+    }
+}
+
+经过处理，发现没有问题了，但是我们不能满足现在的实现，注意遍历mQuery实例化对象里各项的这个地方
+each(this, function(i, ele){
+    aRes = aRes.concat(fn(ele));
+});
+可以想到，我们今后一定会经常遇到这种情况：遍历mQuery实例化对象里面的各个DOM元素，然后对每个元素做一些处理，例如绑定事件、添加删除获取自定义属性等等，因此我们完全有必要将这个操作再次简化，如何简化呢？我们可以添加一个名为each的实例化方法，在这个方法内部调用上层作用域下的each函数来实现该功能，具体代码如下：
+mQuery.prototype.each = function(fn){
+    each(this, fn);
+};
+这样我们的遍历代码就变为
+each({
+    "prev": function (ele) {
+        return _getSiblings(ele, "previousSibling", 1)
+    },
+    "next": function (ele) {
+        return _getSiblings(ele, "nextSibling", 1)
+    },
+    "siblings": function (ele) {
+        return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+    },
+    "children": function (ele) {
+        return _getSiblings(ele.firstChild, "nextSibling")
+    }
+}, function(attr, fn){
+    mQuery.prototype[attr] = function(){
+        var aRes = [];
+        // 注意此处的变化
+        this.each(function(i, ele){
+            aRes = aRes.concat(fn(ele));
+        });
+        return _getMQueryObjFromEleArray(this, aRes);
+    };
+});
+
+实际上我们可以发现原生的for循环或for in循环有很多不足之处，因此我们肯定盼望着在外部也能用到each这样的功能，因此我们非常有必要把each这个功能也贡献出去，那怎么贡献出去呢？目前我们给外部提供的接口只有：
+window.$ = mQuery;
+也就是说外部只能通过$来和我们的框架内部沟通
+此时要用到js里一个很重要的思想：一切皆对象，既然所有东西都是对象，可以想到mQuery也是一个对象，只要是对象我们就可以给它添加属性或方法，因此我们可以把内部的each添加给mQuery，即：
+mQuery.each = function (obj, fn){
+    if (isArrayLike(obj)) {
+        for (var i = 0; i < obj.length; i++) {
+            if ( fn.call(obj[i], i, obj[i]) === false ) {
+                break;
+            }
+        }
+    } else if (Object.prototype.toString.call(obj) === "[object Object]") {
+        for (var attr in obj) {
+            if ( fn.call(obj[attr], attr, obj[attr]) === false ) {
+                break;
+            }
+        }
+    }
+    return obj;
+};
+实际上由于我们js中的构造函数就相当于类，因此现在给mQuery这个构造函数添加方法实际上就是添加所谓的静态方法，静态方法属于某个类而不属于类的某个实例化对象，在Java、C++等语言中静态方法内部不允许访问this的原因就是如此，Java和C++中this代表当前正在使用的实例化对象，但是在静态方法中无法确定this到底指向谁，但是Js中就不一样了，看如下案例：
+mQuery.testFn = function(){
+    this.testProp = "测试属性";
+};
+mQuery.testFn();
+console.log(mQuery);
+执行上面这段代码可以发现mQuery上已经有了testProp这个属性了，由此我们可以发现，实际上testFn这个静态方法内部的this指向的就是mQuery这个对象本身，此时再回过头来看一看实例化方法里面的this：
+mQuery.prototype.testInstanceFn = function(){
+    this.testInstanceProp = "测试实例化属性";
+};
+mQuery(".div").testInstanceFn();
+console.log(mQuery(".div"));
+执行上面这段代码可以发现mQuery(".div")对象上已经有testInstanceProp这个属性了
+通过以上两个测试案例我们想证明的问题是静态方法和实例化方法内部都可以访问到this，但是该this的指向是截然不同的，该结论很重要，尤其是后期实现extend方法时就充分利用了这一特性。
+
+再把目光转向我们最初做抽象时抽出的结构：
+{
+    "prev": function (ele) {
+        return _getSiblings(ele, "previousSibling", 1)
+    },
+    "next": function (ele) {
+        return _getSiblings(ele, "nextSibling", 1)
+    },
+    "siblings": function (ele) {
+        return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+    },
+    "children": function (ele) {
+        return _getSiblings(ele.firstChild, "nextSibling")
+    }
+}
+可能读者会有疑问，为什么抽成这样，是通过什么思路抽成这种结构的，实际上笔者个人认为结构是什么样都可以，此处数据的结构主要是考虑到接下来的遍历的方便性，例如我们也可以把结构抽象成这样：
+[
+    {
+        fnName: "prev",
+        fnEntity: function (ele) {
+            return _getSiblings(ele, "previousSibling", 1)
+        }
+    },
+    {
+        fnName: "next",
+        fnEntity: function (ele) {
+            return _getSiblings(ele, "nextSibling", 1)
+        }
+    },
+    {
+        fnName: "siblings",
+        fnEntity: function (ele) {
+            return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+        }
+    },
+    {
+        fnName: "children",
+        fnEntity: function (ele) {
+            return _getSiblings(ele.firstChild, "nextSibling")
+        }
+    }
+]
+也是可以的
+可能还有朋友有疑问，_getSiblings也是一样的，为什么不公共处理而在遍历数组中每个都重复的写一份呢，实际上并不是不能做公共处理，而是一旦把_getSiblings放到公共处理函数中之后如果想要有其他异于_getSiblings类型的回调就不能加到该遍历队列中去了
+事实上抽象程度越高，适用范围也就会越窄。笔者曾经开发过一个表单校验插件就是如此：当时的需求是有两种类型的校验方式，一种是在input后面提示错误信息，另一种是把错误信息都集中到某个地方提示（可参考京东登录页表单校验），事实上这两种校验方式差异很大，应该封装两种不同的插件，但是年少无知的我强行将这两种校验方式合并成了一种，最后虽然达到了目的，但是插件的调用极为繁琐，需要配置的参数过多，完全违背了插件简单易用的原则
+
+说的废话有点多，接下来赶快实现最后的两个方法：parent和parents
+parent方法找mQuery实例化对象中各个DOM对象的直接父级，可以通过传入选择器来过滤结果
+parents方法和parent方法功能一样，此外它还会沿着DOM树一直向上查找，即支持跨级选择父级
+由于传入选择器过滤选择到的结果这个功能涉及到了sizzle选择器，因此我们放到后期讨论
+{
+    "prev": function (ele) {
+        return _getSiblings(ele, "previousSibling", 1)
+    },
+    "next": function (ele) {
+        return _getSiblings(ele, "nextSibling", 1)
+    },
+    "siblings": function (ele) {
+        return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+    },
+    "children": function (ele) {
+        return _getSiblings(ele.firstChild, "nextSibling")
+    },
+    "parent": function (ele) {
+        return _getSiblings(ele, "parentNode", 1);
+    },
+    "parents": function (ele) {
+        return _getSiblings(ele, "parentNode");
+    }
+}
+
+最后我们再来看拖了很久的判断类型，js类型判断也经历了长期的演变，比较典型的当属字符串判断，以下讨论引用自玉伯的github：
+==========引用开始
+判断一个变量是否字符串类型，最简单直接的写法是
+function isString(obj) {
+    return typeof obj == "string"
+}
+绝大部分情况下，以上代码就够用了。然而
+typeof new String("xxx") // => "object"
+当字符串是通过 new String 生成时，typeof 返回的是 "object"，因为 new String 返回的的确是对象。可以参考这篇总结文：JavaScript's typeof operator 。
+但我们才不管是字符串直接量，还是字符串对象呢，我们希望这两种情况下，isString 都能返回 true 。于是
+function isString(obj) {
+    return typeof obj == "string" || obj instanceof String
+}
+上面的写法，曾出现在各种流行类库的早期代码中，一直工作得好好的。直到有人在 iframe 中，写出以下代码
+// 在 iframe 中
+var foo = new String("bar")
+if (top.isString(foo)) {
+    // Do some cool things
+}
+上面的代码，是调用父页面的 isString 方法，来判断 iframe 中的变量是否字符串。由于 iframe 和 top 中的 String 全局对象并不相等，因此 obj instanceof String 会返回 false，于是 top.isString(foo) 华丽丽地挂了。
+做前端真苦逼，但不能因为苦逼就撂挑子不干了。全世界范围内开始为这一「难题」想尽各种办法，后来有神人出山，轻松给出一段代码
+function isString(obj) {
+    Object.prototype.toString.call(obj) == "[object String]"
+}
+此代码一出，天下震惊，引各路类库竞折腰。这代码，可不仅仅解决了 isString 的问题，而是解决了 isXxx 一类问题。
+神码原理很简单。简言之，是因为 ECMAScript 就是这么规定的，而各个浏览器都遵守了这一规定，因此就有了这一统天下的写法。有兴趣的，可以看这篇文章：instanceof considered harmful (or how to write a robust isArray) 。
+=======引用结束
+因此我们就站在巨人的肩膀上，直接拿来用，但问题是js里面这么多类型，每判断一次都得写Object.prototype.toString.call有点太长，因此我们必然要对其做封装，而封装的思路和我们刚刚完成的DOM遍历如出一辙：
+
