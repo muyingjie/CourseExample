@@ -61,38 +61,31 @@
             }
 
             // DOM遍历
-            var aDomTraverse = [
-                {
-                    // 此处的ele就是将来循环到的mQuery中的每一项
-                    "prev": function (ele) {
-                        return _getSiblings(ele, "previousSibling", 1)
-                    }
-                },{
-                    "next": function (ele) {
-                        return _getSiblings(ele, "nextSibling", 1)
-                    }
-                },{
-                    "siblings": function (ele) {
-                        return _getSiblings(ele.parentNode.firstChild, "nextSibling")
-                    }
-                },{
-                    "children": function (ele) {
-                        return _getSiblings(ele.firstChild, "nextSibling")
-                    }
+            var oDomTraverse = {
+                // 此处的ele就是将来循环到的mQuery中的每一项
+                "prev": function (ele) {
+                    return _getSiblings(ele, "previousSibling", 1)
+                },
+                "next": function (ele) {
+                    return _getSiblings(ele, "nextSibling", 1)
+                },
+                "siblings": function (ele) {
+                    return _getSiblings(ele.parentNode.firstChild, "nextSibling")
+                },
+                "children": function (ele) {
+                    return _getSiblings(ele.firstChild, "nextSibling")
                 }
-            ];
-            for(var i = 0; i < aDomTraverse.length; i++){
-                for(var attr in aDomTraverse[i]){
-                    (function (i, attr) {
-                        mQuery.prototype[attr] = function () {
-                            var aRes = [];
-                            for(var j = 0; j < this.length; j++){
-                                aRes = aRes.concat(aDomTraverse[i][attr](this[j]));
-                            }
-                            return _getMQueryObjFromEleArray(this, aRes);
-                        };
-                    })(i, attr);
-                }
+            };
+            for(var attr in oDomTraverse){
+                (function (attr) {
+                    mQuery.prototype[attr] = function () {
+                        var aRes = [];
+                        for(var j = 0; j < this.length; j++){
+                            aRes = aRes.concat(oDomTraverse[attr](this[j]));
+                        }
+                        return _getMQueryObjFromEleArray(this, aRes);
+                    };
+                })(attr);
             }
 
             function _getMQueryObjFromEleArray(oMQuery, aEle){
@@ -150,5 +143,6 @@
     console.log($(".div3").prev());
     console.log($(".div3").siblings());
     console.log($(".div3").children());
+    console.log($(".wrap").children());
 </script>
 </html>
