@@ -43,7 +43,9 @@
                 }
             };
 
-            // 以下划线开头，仅供内部使用的私有方法
+            mQuery.prototype.init.prototype = mQuery.prototype;
+
+            // 获取属于指定父级下的元素集合
             function _getElesBelongToSpecPar(res, context){
                 var collection = [];
                 var oCurParNode;
@@ -60,6 +62,7 @@
                 return collection;
             }
 
+            // 将数组转为mQuery对象
             function _getMQueryObjFromEleArray(oMQuery, aEle){
                 if (aEle.length == 0) {
                     for(var i = 0; i < oMQuery.length; i++){
@@ -74,6 +77,8 @@
                 return oMQuery;
             }
 
+
+            // 遍历增强
             mQuery.each = function (obj, fn){
                 if (isArrayLike(obj)) {
                     for (var i = 0; i < obj.length; i++) {
@@ -81,7 +86,7 @@
                             break;
                         }
                     }
-                } else if (Object.prototype.toString.call(obj) === "[object Object]") {
+                } else if (mQuery.isObject(obj)) {
                     for (var attr in obj) {
                         if ( fn.call(obj[attr], attr, obj[attr]) === false ) {
                             break;
@@ -93,6 +98,25 @@
             mQuery.prototype.each = function(fn){
                 mQuery.each(this, fn);
             };
+
+            // 类型判断
+            // 先定义一个对象，将key设置为调用toString方法之后的值，值设置为对应的类型
+            var oToStringVal = {};
+            mQuery.each("Boolean Number String Function Array Date RegExp Object".split(" "), function (i, t) {
+                oToStringVal["[object " + t + "]"] = t.toLowerCase();
+            });
+            // 再开一个type方法用于返回当前传入的数据的类型
+            mQuery.type = function (v) {
+                return oToStringVal[Object.prototype.toString.call(v)];
+            };
+            // 对于判断对象和数组这种常用的行为还可以专门开出方法
+            mQuery.isArray = function (v) {
+                return mQuery.type(v) === "array";
+            };
+            mQuery.isObject = function (v) {
+                return mQuery.type(v) === "object";
+            };
+
             function isArrayLike(obj){
                 var isArray = Object.prototype.toString.call(obj) == "[object Array]";
                 var length = obj && obj.length;
@@ -112,7 +136,6 @@
                     return false;
                 }
             }
-
 
             // DOM遍历模块
             mQuery.each({
@@ -164,8 +187,6 @@
                 return res;
             }
 
-            mQuery.prototype.init.prototype = mQuery.prototype;
-
             window.$ = mQuery;
         })(window, undefined);
     </script>
@@ -191,9 +212,5 @@
     console.log($(".wrap").children());
     console.log($(".div6").parent());
     console.log($(".div6child").parents());
-
-    mQuery.each({
-
-    })
 </script>
 </html>

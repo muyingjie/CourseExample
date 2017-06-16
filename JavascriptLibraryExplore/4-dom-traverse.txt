@@ -263,3 +263,59 @@ function isString(obj) {
 =======引用结束
 因此我们就站在巨人的肩膀上，直接拿来用，但问题是js里面这么多类型，每判断一次都得写Object.prototype.toString.call有点太长，因此我们必然要对其做封装，而封装的思路和我们刚刚完成的DOM遍历如出一辙：
 
+// 先定义一个对象，将key设置为调用toString方法之后的值，值设置为对应的类型
+var oToStringVal = {};
+mQuery.each("Boolean Number String Function Array Date RegExp Object".split(" "), function (i, t) {
+    oToStringVal["object " + t] = t.toLowerCase();
+});
+// 再开一个type方法用于返回当前传入的数据的类型
+mQuery.type = function (v) {
+    return oToStringVal[Object.prototype.toString.call(v)];
+};
+// 对于判断对象和数组这种常用的行为还可以专门开出方法
+mQuery.isArray = function (v) {
+    return mQuery.type(v) === "array";
+};
+mQuery.isObject = function (v) {
+    return mQuery.type(v) === "object";
+};
+
+这样一来我们就可以把代码里面那一长串Object.prototype.toString.call换成短小精悍的mQuery.type了，但有一个问题需要思考：isArrayLike函数里面用到了判断一个值是否为数组，这里面我们可以将其换成mQuery.isArray吗？
+
+答案是No，其实原因也很简单：
+
+我们发现我们的类型判断基于一个名为oToStringVal的变量，在生成oToStringVal这一步：
+mQuery.each("Boolean Number String Function Array Date RegExp Object".split(" "), function (i, t) {
+用到了each静态方法，而each方法内部又用到了isArrayLike方法，而此时
+mQuery.each("Boolean Number String Function Array Date RegExp Object".split(" "), function (i, t) {
+这一步都还没有走完，oToStringVal对象都还没有生成成功，基于oToStringVal的以下代码：
+mQuery.type = function
+mQuery.isArray = function
+mQuery.isObject = function
+都还没被浏览器所解析，换句话说mQuery这个对象上还没有isArray isType isObject这些方法，这个时候如果去直接用mQuery.isArray()必然直接报错：
+Uncaught TypeError: mQuery.isArray is not a function
+因此我们选择不用mQuery.isArray
+
+除了这个地方，其他地方尤其是调用方法的地方一定要搞明白调用的方法里面用到的一些对象或方法是否已经被定义，如果没被定义就得谨慎使用
+
+当然由此也可以看到，jQuery内部已经出现了代码之间相互依赖的问题了，当下我们解决该问题的办法纯粹是人工检查，检查到不能用的地方就改过来，但这是一种风险极高的做法，道理就跟c++中手动申请释放内存一样，即使检查的足够仔细，依然难以避免内存泄漏，在我们将第二篇中提到的所有这些模块都实现了之后，我们会考虑如何模块化管理我们的代码，并从头开始构建一个模块化管理的框架
+
+此外还有一点需要注意，到此为止我们发现代码已经开始变的比较混乱，尤其是静态方法，目前的静态方法已经有each type isArray isObject，后期还会添加更多这么多方法都写成
+mQuery.xxx = function(){};
+虽然没问题，但是每次都写一次mQuery也比较麻烦，而且万一哪一天这个全局变量换名字了（虽然可能性比较低）改起来也麻烦
+实例化方法也会有同样的问题，当然实例化对象情况可能好一些，可以借用js继承当中的思想：
+mQuery.prototype = {
+    constructor: mQuery,
+    aaa: function () {},
+    bbb: function () {},
+    ccc: function () {}
+};
+
+这时我们肯定在想，如果要是能有一个函数可以把提供的静态方法也按照这种方式扩展到mQuery对象上将会对方法管理提供很大便利：
+extend({
+    aaa: function () {},
+    bbb: function () {},
+    ccc: function () {}
+});
+所以这样一个很自然的需求就有了，我们将在下篇分析它的实现
+代码地址：
