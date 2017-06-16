@@ -1,0 +1,13 @@
+接着上一篇继续，根据最后的分析，实际上我们是想要一个可以给mQuery扩展一些方法或属性的函数，假如名为extend：
+extend({
+    aaa: function () {},
+    bbb: function () {},
+    ccc: function () {}
+});
+执行完了之后我们希望mQuery对象上就有aaa、bbb、ccc三个方法了，当然这么好用的方法仅仅在框架内部用一用未免有点可惜，因此可以挂到mQuery上开放出来：
+mQuery.extend = function (srcObj) {
+
+};
+实际上实现该方法很简单：
+
+实际上为了更通用、更抽象一些，我们可以再增加一个参数
