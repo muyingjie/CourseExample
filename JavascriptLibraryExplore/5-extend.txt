@@ -1,13 +1,184 @@
-接着上一篇继续，根据最后的分析，实际上我们是想要一个可以给mQuery扩展一些方法或属性的函数，假如名为extend：
+接着上一篇继续，根据最后的分析，实际上我们是想要一个可以给mQuery扩展一些方法或属性的函数，假如该函数名为extend：
 extend({
     aaa: function () {},
     bbb: function () {},
     ccc: function () {}
 });
-执行完了之后我们希望mQuery对象上就有aaa、bbb、ccc三个方法了，当然这么好用的方法仅仅在框架内部用一用未免有点可惜，因此可以挂到mQuery上开放出来：
+执行完了之后我们希望mQuery对象上就有aaa、bbb、ccc三个方法了，实际上实现该方法很简单：
+function extend(src){
+	for(var attr in src){
+		mQuery[attr] = src[attr];
+	}
+	return mQuery;
+}
+当然这么好用的方法仅仅在框架内部用一用未免有点可惜，因此可以挂到mQuery上开放出来：
 mQuery.extend = function (srcObj) {
-
+	for(var attr in src){
+		this[attr] = src[attr];
+	}
+	return this;
 };
-实际上实现该方法很简单：
+注意我们在函数实现中用了this，所以在外部如果这样调用：
+$.extend({
+	ddd: function(){}
+});
+相当于给mQuery这个对象本身扩展了一个静态方法，通常扩展静态方法类型的插件就是基于此原理。
 
-实际上为了更通用、更抽象一些，我们可以再增加一个参数
+不过这么好用的功能仅仅能给mQuery对象扩展方法未免有点可惜，我们平时开发的时候也会遇到希望给某个对象添加一个属性或方法的场合，例如：
+var dst = {
+	a: 1
+};
+// 假如我们希望给dst扩展一个名为b的属性，其值为2
+// 我们可这样做：
+dst.b = 2;
+
+我们不妨改造一下extend使其能够完成上面扩展属性b的功能，方法也很简单，再加一个参数即可：
+mQuery.extend = function (srcObj, dstObj) {
+	dstObj = dstObj || this;
+	for(var attr in src){
+		dstObj[attr] = src[attr];
+	}
+	return dstObj;
+};
+
+注意我们把形参dstObj，也就是目的对象放在了第二个参数的位置，这样给外部提供多种调用方式时extend内部处理起来较为方便：
+var obj1 = {};
+var obj2 = {
+	a: 1
+};
+$.extend(obj2, obj1); // 如果给dstObj传了对应的实参，则是为传入的实参扩展属性或方法
+$.extend(obj2); // 如果没有给dstObj传递对应的实参，则在内部处理为给mQuery对象本身做扩展
+
+extend内部判断只需dstObj = dstObj || this;就搞定
+
+但是用过jQuery的朋友都知道，这个参数顺序和jQuery正好相反，将形参srcObj和dstObj对调有什么后果呢
+
+mQuery.extend = function (dstObj, srcObj) {
+	if (!srcObj) {
+		srcObj = dstObj;
+		dstObj = this;
+	}
+	for(var attr in src){
+		dstObj[attr] = src[attr];
+	}
+	return dstObj;
+};
+对于这种形式的参数处理稍微拐了一个小弯儿
+如果srcObj传入了，一切皆大欢喜
+如果没有传入srcObj，则会认为dstObj充当了srcObj的功能，也就是dstObj成了待扩展的方法集合对象，而目的对象是this
+
+这种处理方式明显没有上面一种简洁，个人认为jQuery将目的对象放在第一个位置，而将源对象放在第二个位置可能是处于用户调用的习惯问题
+
+还需要注意的是我们目前只是简单的做了一下参数的判断，实际上对于dstObj和srcObj的类型检查应该很严格，我们会在后面详细讨论
+
+稍微扯的远了一点，回到正题，其实我们可以看到不用extend函数给对象扩展属性貌似也不麻烦：
+dst.b = 2;
+干嘛费这个劲专门用extend去扩展呢？
+当然扩展这种简单类型的值用extend确实不够直观，也很啰嗦，但是设想一下下面这种情况如果用普通的方式去扩展会存在什么问题：
+var obj1 = {};
+var obj2 = {
+	a: {
+		b: 1
+	}
+};
+obj1.a = obj2.a;
+// 接下来修改obj2里面a属性中对象属性b的值为2
+obj2.a.b = 2;
+console.log(obj1.a.b); // 2
+可以发现obj1.a.b的属性值也变为了2
+
+当然问题的原因也很简单，就是因为obj2对象的a属性即
+{
+	b: 1
+}
+这也是一个实实在在的对象，它在内存中占据一定的空间，直接将该对象通过等号的方式赋给obj1下的a属性就会导致obj1和obj2的a属性指向同一块内存空间，那么不管是通过obj1.a.b = 2还是obj2.a.b = 2都会将b的值改为2
+当然现在我们的extend也没有实现这个功能，那么如何实现呢？也很简单，两个字：递归
+mQuery.extend = function (dstObj, srcObj) {
+	if (!srcObj) {
+		srcObj = dstObj;
+		dstObj = this;
+	}
+	for(var attr in src){
+		if (mQuery.isObject(src[attr])) {
+			// 如果是对象类型，先将当前循环到的属性深拷贝一份出来
+			// 这里的extend第一个参数是一个三目，代表如果当前目的对象如果有attr属性，就在attr属性上扩展，否则创建一个新的对象用于目的对象，由于mQuery.extend最终会返回处理好的target目的对象，因此可以将该处理好的对象赋给源对象即可
+			dstObj[attr] = mQuery.extend(dstObj[attr] ? dstObj[attr] : {}, src[attr]);
+		} else {
+			dstObj[attr] = src[attr];
+		}
+	}
+	return dstObj;
+};
+
+浅拷贝的问题也解决了，但是问题又来了，有时候我不需要浅拷贝，我就需要引用传递，而且深拷贝比浅拷贝更耗性能，而且实际用的也不多，所以我们的extend在执行时希望默认采用浅拷贝的方式。实现这个需求的思路依然很简单，继续传参，只要是用户可以决定的东西必然要通过传参来解决，那么接下来问题来了，这个参数该放在哪个位置，其实无非三种选择，最开头，最后面、dstObj和srcObj中间，dstObj和srcObj中间稍稍一想就会觉得很麻烦，我们可以先放在最后看看怎么样，由于此时函数的传递比较复杂，因此我们会判断函数传入的个数分情况处理：
+mQuery.extend = function (dstObj, srcObj, isDeepCopy) {
+	var len = arguments.length;
+	// 没传参时没有任何意义，直接返回
+	if (len == 0) {
+		return;
+	}
+	// 传递一个参数时，就是给mQuery本身扩展方法，即
+	// $.extend(srcObj);
+	if (len == 1 && mQuery.isObject(dstObj)) {
+		srcObj = dstObj;
+		dstObj = this;
+		isDeepCopy = false;
+	} else {
+		throw new Error("extend参数错误");
+	}
+	// 传递两个参数时，可能是如下情况
+	// $.extend(dstObj, srcObj); 没有传isDeepCopy，根据我们的规则，默认为false
+	// $.extend(dstObj, isDeepCopy); 没有传srcObj，而isDeepCopy占据了srcObj的位置
+	// 由此可以分析出来，关键看第二个参数是什么类型
+	if (len == 2) {
+		if (mQuery.type(srcObj) == "boolean") {
+			isDeepCopy = srcObj;
+			srcObj = dstObj;
+			dstObj = this;
+		} else if ( mQuery.isObject(dstObj) && mQuery.isObject(srcObj) ) {
+			// 如果第二个参数srcObj不是布尔类型的话，这两个参数必须是对象类型
+			isDeepCopy = false;
+		} else {
+			throw new Error("extend参数错误");
+		}
+	}
+	// 传递3个参数时只需判断下参数类型即可
+	if (len == 3 && (!mQuery.isObject(dstObj) || !mQuery.isObject(srcObj) || mQuery.type(isDeepCopy) != "boolean")) {
+		throw new Error("extend参数错误");
+	}
+	...
+};
+用第一个参数表征是否深拷贝时也差不多，而且jQuery就是这样做的，我们直接给出实现：
+mQuery.extend = function (isDeepCopy, dstObj, srcObj) {
+	var len = arguments.length;
+	if (len == 0) {
+		return;
+	}
+	if (len == 1 && mQuery.isObject(dstObj)) {
+		srcObj = dstObj;
+		dstObj = this;
+		isDeepCopy = false;
+	} else {
+		throw new Error("extend参数错误");
+	}
+	if (len == 2) {
+		if (mQuery.type(isDeepCopy) == "boolean") {
+			isDeepCopy = srcObj;
+			srcObj = dstObj;
+			dstObj = this;
+		} else if ( mQuery.isObject(isDeepCopy) && mQuery.isObject(dstObj) ) {
+			isDeepCopy = false;
+			srcObj = dstObj;
+			dstObj = this;
+		} else {
+			throw new Error("extend参数错误");
+		}
+	}
+	if (len == 3 && (!mQuery.isObject(dstObj) || !mQuery.isObject(srcObj) || mQuery.type(isDeepCopy) != "boolean")) {
+		throw new Error("extend参数错误");
+	}
+};
+
+事实上可以看到不管是哪种，判断逻辑都非常繁琐，而且代码也很臃肿，事实上我们可以在此基础上进行一定的简化
+
+dstObj, srcObj的类型检查
