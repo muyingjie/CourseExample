@@ -137,6 +137,56 @@
                 }
             }
 
+            mQuery.extend = mQuery.prototype.extend = function () {
+                var args = [].slice.call(arguments);
+                var isDeepCopy = args[0];
+                var srcObjStartIndex;
+                var dstObj;
+                var cur;
+                var curIsObject;
+                var curDstVal;
+                var handledDstVal;
+
+                if (mQuery.type(isDeepCopy) !== "boolean") {
+                    isDeepCopy = false;
+                } else {
+                    args.shift();
+                }
+                if (args.length == 0) {
+                    throw new Error("extend参数错误");
+                } else if (args.length == 1) {
+                    dstObj = this;
+                    srcObjStartIndex = 0;
+                } else if (args.length == 2) {
+                    dstObj = args[0];
+                    srcObjStartIndex = 1;
+                }
+
+                for (var i = srcObjStartIndex; i < args.length; i++) {
+                    cur = args[i];
+                    for(var attr in cur){
+                        // 如果遍历到了对象或数组类型的值而且是深拷贝的情况，递归遍历
+                        curIsObject = mQuery.isObject(cur[attr]);
+                        curDstVal = cur[attr];
+                        if ((mQuery.isObject(curDstVal) || mQuery.isArray(curDstVal)) && isDeepCopy) {
+                            if (curIsObject) {
+                                // 对象类型值的情况，只要目标对象对应的属性值不是对象类型就将其初始化为空对象
+                                handledDstVal = mQuery.isObject(dstObj[attr]) ? dstObj[attr] : {};
+                            } else {
+                                // 数组类型值的情况，只要目标对象对应的属性值不是数组类型就将其初始化为空数组
+                                handledDstVal = mQuery.isArray(dstObj[attr]) ? dstObj[attr] : [];
+                            }
+                            dstObj[attr] = handledDstVal;
+                            dstObj[attr] = mQuery.extend(isDeepCopy, dstObj[attr], cur[attr]);
+                        } else {
+                            dstObj[attr] = cur[attr];
+                        }
+                    }
+                }
+                // 此处一定要记得返回被修改了的目的对象，因为在深拷贝递归调用的过程中会用到这个返回值
+                return dstObj;
+            };
+
             // DOM遍历模块
             mQuery.each({
                 "prev": function (ele) {
@@ -204,5 +254,26 @@
 </div>
 </body>
 <script>
+    // 对象深拷贝测试
+    var outObj = {
+        aaa: {
+            bbb: 1
+        }
+    };
+    // $.extend(outObj);
+
+    // $.extend(true, outObj);
+    outObj.aaa.bbb = 3;
+    // for (var attr in $){
+    //     console.log(attr, $[attr]);
+    // }
+
+    // 数组深拷贝测试
+    var outArr = {ccc: [1, 2, [3, 4]]};
+    $.extend(true, outArr);
+    outArr.ccc.push(5);
+    for (var attr in $){
+        console.log(attr, $[attr]);
+    }
 </script>
 </html>
