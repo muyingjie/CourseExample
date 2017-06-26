@@ -1,0 +1,6 @@
+后期需补充的功能：
+
+1、DOM遍历模块，parent或parents方法，可以传入选择器来定位到该选择器对应的父级
+2、DOM增删模块，remove方法，待数据缓存模块实现之后需要在删除DOM元素时将该DOM关联的数据也删掉
+3、DOM增删模块，remove方法，待sizzle实现之后remove方法可以传入一个选择器，调用filter筛选到对应的元素再删除
+4、append、prepend可以传入函数

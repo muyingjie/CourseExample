@@ -63,11 +63,11 @@ mQuery.extend = function (dstObj, srcObj) {
 	}
 	return dstObj;
 };
-对于这种形式的参数处理稍微拐了一个小弯儿
+对于改变顺序的参数处理稍微拐了一个小弯儿
 如果srcObj传入了，一切皆大欢喜
 如果没有传入srcObj，则会认为dstObj充当了srcObj的功能，也就是dstObj成了待扩展的方法集合对象，而目的对象是this
 
-这种处理方式明显没有上面一种简洁，个人认为jQuery将目的对象放在第一个位置，而将源对象放在第二个位置可能是处于用户调用的习惯问题
+这种处理方式明显没有上面一种简洁，个人认为jQuery将目的对象放在第一个位置，而将源对象放在第二个位置可能是出于用户调用的习惯问题
 
 还需要注意的是我们目前只是简单的做了一下参数的判断，实际上对于dstObj和srcObj的类型检查应该很严格，我们会在后面详细讨论
 
@@ -179,6 +179,126 @@ mQuery.extend = function (isDeepCopy, dstObj, srcObj) {
 	}
 };
 
-事实上可以看到不管是哪种，判断逻辑都非常繁琐，而且代码也很臃肿，事实上我们可以在此基础上进行一定的简化
+事实上可以看到不管是哪种，判断逻辑都非常繁琐，而且代码也很臃肿，事实上我们可以在此基础上进行一定的简化，以第一个参数表征是否深拷贝为例：
+mQuery.extend = function () {
+    // 先拿到所有参数构成的数组，此处强行将[].slice方法内部的this指向改为arguments
+    var args = [].slice.call(arguments);
+    // 先看一下第一个参数的类型
+    var isDeepCopy = args[0];
+    var srcObj;
+    var dstObj;
+    // 如果第一个参数
+    if (mQuery.type(isDeepCopy) !== "boolean") {
+        isDeepCopy = false;
+    } else {
+        args.shift();
+    }
+    // 再判断剩下的参数（args）的长度
+    if (args.length == 0) {
+        // 如果总共只传了一个参数，是有问题的
+        throw new Error("extend参数错误");
+    } else if (args.length == 1) {
+        // 如果只剩一个参数了，就是给mQuery本身增加扩展
+        dstObj = this;
+        srcObj = args[0]
+    } else if (args.length == 2) {
+        dstObj = args[0];
+        srcObj = args[1];
+    }
+};
 
-dstObj, srcObj的类型检查
+用过jQuery的朋友都知道，jQuery还支持多个源对象给一个目标对象扩展方法，这个需求实现起来也简单，只需定义一个变量用来表示源对象的起始位置（srcObjStartIndex），注意如果传递了isDeepCopy，该索引是除去isDeepCopy之后的位置
+mQuery.extend = function () {
+    var args = [].slice.call(arguments);
+    var isDeepCopy = args[0];
+    var srcObjStartIndex;
+    var dstObj;
+
+    if (mQuery.type(isDeepCopy) !== "boolean") {
+        isDeepCopy = false;
+    } else {
+        args.shift();
+    }
+    if (args.length == 0) {
+        throw new Error("extend参数错误");
+    } else if (args.length == 1) {
+        dstObj = this;
+        // 如果只剩一个参数了，这个参数就是源对象
+        srcObjStartIndex = 0;
+    } else { // 注意这里不是else if而是else了
+        dstObj = args[0];
+        // 源对象是从第二个参数开始
+        srcObjStartIndex = 1;
+    }
+};
+参数的处理到此为止，接下来的工作就是把源对象扩展到目的对象上了，而这一步的话其实就是循环遍历所有源对象，将遍历到的每一项扩展到目标对象上即可，遍历到每一项时需要判断其类型是简单数据类型还是复杂数据类型，如果是简单类型直接等号赋值拷贝过去，如果是复杂数据类型则要递归遍历，直到遍历到简单类型，最终都会走等号赋值这一步。
+mQuery.extend = function () {
+    var args = [].slice.call(arguments);
+    var isDeepCopy = args[0];
+    var srcObjStartIndex;
+    var dstObj;
+    var cur;
+    var curIsObject;
+    var curDstVal;
+    var handledDstVal;
+
+    if (mQuery.type(isDeepCopy) !== "boolean") {
+        isDeepCopy = false;
+    } else {
+        args.shift();
+    }
+    if (args.length == 0) {
+        throw new Error("extend参数错误");
+    } else if (args.length == 1) {
+        dstObj = this;
+        srcObjStartIndex = 0;
+    } else if (args.length == 2) {
+        dstObj = args[0];
+        srcObjStartIndex = 1;
+    }
+
+    for (var i = srcObjStartIndex; i < args.length; i++) {
+        cur = args[i];
+        for(var attr in cur){
+            // 如果遍历到了对象或数组类型的值而且是深拷贝的情况，递归遍历
+            curIsObject = mQuery.isObject(cur[attr]);
+            curDstVal = cur[attr];
+            if ((mQuery.isObject(curDstVal) || mQuery.isArray(curDstVal)) && isDeepCopy) {
+                if (curIsObject) {
+                    // 对象类型值的情况，只要目标对象对应的属性值不是对象类型就将其初始化为空对象
+                    handledDstVal = mQuery.isObject(dstObj[attr]) ? dstObj[attr] : {};
+                } else {
+                    // 数组类型值的情况，只要目标对象对应的属性值不是数组类型就将其初始化为空数组
+                    handledDstVal = mQuery.isArray(dstObj[attr]) ? dstObj[attr] : [];
+                }
+                dstObj[attr] = handledDstVal;
+                dstObj[attr] = mQuery.extend(isDeepCopy, dstObj[attr], cur[attr]);
+            } else {
+                dstObj[attr] = cur[attr];
+            }
+        }
+    }
+    // 此处一定要记得返回被修改了的目的对象，因为在深拷贝递归调用的过程中会用到这个返回值
+    return dstObj;
+};
+
+一定要注意，最后一定要返回目标对象，因为我们在递归调用的过程中要用这个返回值：
+dstObj[attr] = mQuery.extend(isDeepCopy, dstObj[attr], cur[attr]);
+
+到此为止，extend的功能全部完成了，不过也可以看到目前我们只能通过这个方法给mQuery对象本身扩展方法，如果我们想要给mQuery.prototype扩展方法，也就是扩展实例化方法的话就需要这样来做：
+mQuery.extend(mQuery.prototype, {
+    eee: function (){}
+});
+这样就把eee方法扩展到mQuery.prototype了，在外部就可以通过$(xxx).eee(xxx)这样来调用了，但是这样的写法明显感觉比较别扭，实际上我们完全可以将extend也挂在mQuery.prototype上，即
+mQuery.prototype.extend = mQuery.extend = function(){...};
+
+注意到extend方法内部用到了this，而也恰恰是这个this实现了一个方法的多重调用，函数中this指向该函数调用时的所属对象，因此不同调用形式this的指向是不一样的
+当通过
+mQuery.extend({})
+这样调用时，extend里面的this所属的对象是mQuery本身
+
+而通过
+mQuery.prototype.extend({})
+调用时，extend里面的this所属的对象就是mQuery.prototype了
+
+至此，和extend相关的所有内容全部介绍完毕，下一篇我们将分析DOM对象的增加和删除这一话题
