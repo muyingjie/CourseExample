@@ -1,1 +1,12 @@
-这一篇我们来封装DOM增删的功能
+这一篇我们来封装DOM增删的功能，和之前一样，我们先来明确要实现哪些方法：
+text    设置或获取DOM对象中文本的内容
+html    设置或获取DOM对象中html
+append
+注：
+1、text和html不传参时是获取DOM对象对应的值，传入参数时是设置所有DOM对象对应的值
+2、获取值时，获取的是第一个jquery对象中第一个DOM对象的值
+3、至于text和html的区别可以看下面的例子：
+    对于如下html结构：
+    <div id="div1"><span>test</span></div>
+
+    $("#div1").html() // 得到的是
