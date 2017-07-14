@@ -1,12 +1,58 @@
 这一篇我们来封装DOM增删的功能，和之前一样，我们先来明确要实现哪些方法：
-text    设置或获取DOM对象中文本的内容
-html    设置或获取DOM对象中html
-append
-注：
-1、text和html不传参时是获取DOM对象对应的值，传入参数时是设置所有DOM对象对应的值
-2、获取值时，获取的是第一个jquery对象中第一个DOM对象的值
-3、至于text和html的区别可以看下面的例子：
-    对于如下html结构：
-    <div id="div1"><span>test</span></div>
+text    设置或获取jquery对象中文本的内容
+html    设置或获取jquery对象中html内容
+append  接收jquery对象作为参数，该jquery对象将添加到父元素的最后
+prepend 接收jquery对象作为参数，该jquery对象将添加到父元素的最开头
+before  接收jquery对象作为参数，该jquery对象将添加到调用元素的前面
+after   接收jquery对象作为参数，该jquery对象将添加到调用元素的后面
+remove  删除调用元素
 
-    $("#div1").html() // 得到的是
+注意：
+1、text和html不传参时是获取jquery类数组对象中第一个DOM对象的text或html的值，传入参数时是设置所有DOM对象对应的值
+2、text和html在设置获取数据时都有一定区别，可以看下面的例子：
+    // 获取html或text值时
+    // 以如下html结构为例：
+    // <div id="div1"><span>test</span></div>
+    $("#div1").html() // 得到的是<span>test</span>
+    $("#div1").text() // 得到的是test
+
+    // 设置html或text值时
+    // 以如下html结构为例：
+    // <div id="div1"></div>
+    $("#div1").html("<span></span>") // <div id="div1"><span></span></div>
+    $("#div1").text("<span></span>") // <div id="div1">&lt;span&gt;&lt;/span&gt;</div>
+
+从第一个append先来吧
+mQuery.prototype.append = function(){
+    // 拿到要添加的元素
+    var oChild = arguments[0];
+
+    // 如果没传参数直接返回
+    if (arguments.length == 0) {
+        return;
+    }
+
+    // 循环调用元素数组，给循环到的每个父元素分别添加子元素
+    this.each(function(i, oPar){
+        if (oPar.nodeType === NODE_TYPE.ELE) {
+            oPar.appendChild(oChild);
+        }
+    });
+
+    // 返回当前元素，以供后面的链式调用
+    return this;
+};
+
+在此需要多说一句，jQuery中的实现远比我们目前的实现复杂的多，例如jQuery多了下列功能：
+1、支持传入多个参数分别append到父元素中，例如$par.append($("<div>"), $("<div>"), $("<div>"));
+2、支持传入一个返回jQuery对象的回调函数作为参数在内部调用将结果append到父元素中
+3、在append到父元素之前先做一下检查，看看当前父元素是不是table元素，如果是table元素的话
+
+至于第一个要求很好处理：
+mQuery.prototype.append = function(){
+    var aChild = arguments;
+
+    this.each(function(i, oPar){
+        mQuery(this)
+    });
+};
