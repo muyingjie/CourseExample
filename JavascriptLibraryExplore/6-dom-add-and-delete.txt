@@ -1,6 +1,6 @@
 这一篇我们来封装DOM增删的功能，和之前一样，我们先来明确要实现哪些方法：
-text    设置或获取jquery对象中文本的内容
-html    设置或获取jquery对象中html内容
+text    设置或获取jquery对象中文本的内容，如果不传参为获取，传参为设置
+html    设置或获取jquery对象中html的内容，如果不传参为获取，传参为设置
 append  接收jquery对象作为参数，该jquery对象将添加到父元素的最后
 prepend 接收jquery对象作为参数，该jquery对象将添加到父元素的最开头
 before  接收jquery对象作为参数，该jquery对象将添加到调用元素的前面
@@ -9,24 +9,21 @@ remove  删除调用元素
 
 注意：
 1、text和html不传参时是获取jquery类数组对象中第一个DOM对象的text或html的值，传入参数时是设置所有DOM对象对应的值
-2、text和html在设置获取数据时都有一定区别，可以看下面的例子：
+2、text和html在设置和获取数据时都有一定区别，通过参考jQuery的表现总结出下面的例子：
     // 获取html或text值时
     // 以如下html结构为例：
     // <div id="div1"><span>test</span></div>
-    $("#div1").html() // 得到的是<span>test</span>
-    $("#div1").text() // 得到的是test
+    $("#div1").html() // 得到的是<span>test</span>，直接调用innerHTML即可得到
+    $("#div1").text() // 得到的是test，通过参考jQuery，经过多番尝试后目测处理方式是递归遍历父元素下所有子节点，找到nodeType为1（文本节点）的节点，将所有的文本节点拼接起来返回
 
     // 设置html或text值时
     // 以如下html结构为例：
     // <div id="div1"></div>
-    $("#div1").html("<span></span>") // <div id="div1"><span></span></div>
-    $("#div1").text("<span></span>") // <div id="div1">&lt;span&gt;&lt;/span&gt;</div>
+    $("#div1").html("<span></span>") // <div id="div1"><span></span></div> 可以猜测直接调用innerHTML设置即可
+    $("#div1").text("<span></span>") // <div id="div1">&lt;span&gt;&lt;/span&gt;</div> 可以把字符串参数遍历一遍，遇到html标识就将其转义输出
 
 从第一个append先来吧
-mQuery.prototype.append = function(){
-    // 拿到要添加的元素
-    var oChild = arguments[0];
-
+mQuery.prototype.append = function($child){
     // 如果没传参数直接返回
     if (arguments.length == 0) {
         return;
@@ -35,7 +32,7 @@ mQuery.prototype.append = function(){
     // 循环调用元素数组，给循环到的每个父元素分别添加子元素
     this.each(function(i, oPar){
         if (oPar.nodeType === NODE_TYPE.ELE) {
-            oPar.appendChild(oChild);
+            oPar.appendChild($child[0]);
         }
     });
 
@@ -46,13 +43,172 @@ mQuery.prototype.append = function(){
 在此需要多说一句，jQuery中的实现远比我们目前的实现复杂的多，例如jQuery多了下列功能：
 1、支持传入多个参数分别append到父元素中，例如$par.append($("<div>"), $("<div>"), $("<div>"));
 2、支持传入一个返回jQuery对象的回调函数作为参数在内部调用将结果append到父元素中
-3、在append到父元素之前先做一下检查，看看当前父元素是不是table元素，如果是table元素的话
+3、在append到父元素之前先做一下检查，看看当前父元素是不是table元素，如果是table元素而且要插入的元素是tr时，自动插入tbody元素
+4、当插入的元素有script标签时执行里面的代码
 
 至于第一个要求很好处理：
 mQuery.prototype.append = function(){
     var aChild = arguments;
 
-    this.each(function(i, oPar){
-        mQuery(this)
+    this.each(function(parentIndex, oPar){
+        jQuery.each(aChild, function(childIndex, $child){
+            oPar.appendChild($child[0]);
+        });
     });
 };
+
+第二个要求传入了函数时只需要调用它并用变量接收其返回值再插入即可
+
+关于第三个要求，此处谈一些个人的意见：jQuery这样做只是阻止了一种错误的调用形式，即不可以将tr直接插入到table中，当程序员试图这样做时jQuery会帮他插入一个tbody，但是这也仅仅是阻止了这一种情况，阻止并帮助修正错误的做法这件事情永远没有止境，例如我直接向table中插入div这种操作jQuery就阻止不了了，直接在table中添加th也阻止不了，因此既然很难把所有情况都阻止掉，那么我在此采取的措施就是干脆一种情况都不管，即都不阻止，出现的错误由程序员自己负责。
+
+至于第四个要求，日常开发中极少有场合必须插入script标签到某个元素中，不做考虑
+
+我们在此主要关注一个框架实现的宏观思路，当大的结构出来之后，这些细节相信读者自己就能实现。因此我们这里不会涉及到过多的细节。
+
+接下来分析第二个方法prepend
+mQuery.prototype.prepend = function($child){
+    // 如果没传参数直接返回
+    if (arguments.length == 0) {
+        return;
+    }
+
+    // 循环调用元素数组，给循环到的每个父元素分别添加子元素
+    this.each(function(i, oPar){
+        if (oPar.nodeType === NODE_TYPE.ELE) {
+            oPar.insertBefore($child[0], oPar.firstChild);
+        }
+    });
+
+    // 返回当前元素，以供后面的链式调用
+    return this;
+};
+
+明显代码又重复了，因此需要提取公共部分，从上面的实现中也可以明显看出两个方法的不同之处在于遍历父级的each回调里面的处理：
+mQuery.prototype.prepend = function($child){
+    // 由于_domManip里面用到了this，所以需要通过call改变this指向为prepend环境中的this，即待插入元素的父级
+    // 此外，一定要注意加上return，否则不能链式调用
+    return _domManip.call(this, $child, function(i, oPar){
+        if (oPar.nodeType === NODE_TYPE.ELE) {
+            oPar.insertBefore($child[0], oPar.firstChild);
+        }
+    });
+};
+mQuery.prototype.append = function($child){
+    return _domManip.call(this, $child, function(i, oPar){
+        if (oPar.nodeType === NODE_TYPE.ELE) {
+            oPar.appendChild($child[0]);
+        }
+    });
+};
+function _domManip($child, callback) {
+    // 如果没传参数直接返回
+    if ($child == undefined) {
+        return;
+    }
+
+    // 循环调用元素数组，给循环到的每个父元素分别添加子元素
+    this.each(callback);
+
+    // 返回当前元素，以供后面的链式调用
+    return this;
+}
+
+上面的代码完全可以用我们上节课封装的extend来优化下使其看起来更简洁：
+mQuery.extend({
+    append: function($child){
+        return _domManip.call(this, $child, function(i, oPar){
+            if (oPar.nodeType === NODE_TYPE.ELE) {
+                oPar.appendChild($child[0]);
+            }
+        });
+    },
+    prepend: function($child){
+        return _domManip.call(this, $child, function(i, oPar){
+            if (oPar.nodeType === NODE_TYPE.ELE) {
+                oPar.insertBefore($child[0], oPar.firstChild);
+            }
+        });
+    }
+});
+
+我们也可以把_domManip也放进去，这样更方便了append和prepend的调用
+mQuery.extend({
+    append: function($child){
+        return this._domManip($child, function(i, oPar){
+            if (oPar.nodeType === NODE_TYPE.ELE) {
+                oPar.appendChild($child[0]);
+            }
+        });
+    },
+    prepend: function($child){
+        return this._domManip($child, function(i, oPar){
+            if (oPar.nodeType === NODE_TYPE.ELE) {
+                oPar.insertBefore($child[0], oPar.firstChild);
+            }
+        });
+    },
+    // $tobeadd是将要被插入的jQuery对象，可能是append、prepend调用时作为子级插入，也可能是before、after调用时作为兄弟节点插入
+    _domManip: function ($tobeadd, callback) {
+        if ($tobeadd == undefined) {
+            return;
+        }
+
+        this.each(callback);
+
+        return this;
+    }
+});
+
+接下来我们实现before和after方法：
+mQuery.extend({
+    before: function($brother){
+        return this._domManip($brother, function(i, oCur){
+            // 先拿到待插入节点的父级
+            var oCurPar = oCur.parentNode;
+            if (oCur.nodeType === NODE_TYPE.ELE && oCurPar != undefined) {
+                oCurPar.insertBefore($brother[0], oCur);
+            }
+        });
+    },
+    after: function($brother){
+        return this._domManip($brother, function(i, oCur){
+            var oCurPar = oCur.parentNode;
+            // 此处无需判断oCur.nextSibling到底是文本节点还是元素节点，因为即使是文本节点，插入在它前面也照样可以
+            // 需要判断的是oCur.nextSibling是不是最后一个节点，当oCur是最后一个节点时oCur.nextSibling会返回null，此时直接调用父级的appendChild即可
+            var oNext = oCur.nextSibling;
+            if (oCur.nodeType === NODE_TYPE.ELE && oCurPar != undefined) {
+                if (oNext) {
+                    oCurPar.insertBefore($brother[0], oNext);
+                } else {
+                    oCurPar.appendChild($brother[0]);
+                }
+            }
+        });
+    }
+});
+
+然后再来实现remove方法，由于remove是删除自身，因此和append prepend before after的处理方式有所不同：
+mQuery.extend({
+    remove: function(){
+        this.each(function(i, oChild){
+            if (oChild.parentNode != null) {
+                oChild.parentNode.removeChild(oChild);
+            }
+        });
+        return this;
+    }
+});
+
+最后再来看text和html方法：
+mQuery.extend({
+    text: function(txt){
+        var txtFragments = [];
+        if (txt) {
+            // 传参的情况
+        } else {
+            // 没传参的情况
+            this.each(function(){});
+            txtFragments.push();
+        }
+    }
+});
